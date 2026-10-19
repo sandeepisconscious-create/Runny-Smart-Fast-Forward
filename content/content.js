@@ -463,15 +463,44 @@
         }
       }
     } else {
-      // Switched back to this tab
-      if (autoPipEntered && document.pictureInPictureElement) {
+      // Switched back to this tab: seamlessly close the PiP window back into the player
+      if (document.pictureInPictureElement) {
+        const pipVideo = document.pictureInPictureElement;
         try {
           await document.exitPictureInPicture();
-          autoPipEntered = false;
         } catch (_) {}
+        autoPipEntered = false;
+
+        // Force frame decode and repaint so player is immediately live
+        if (pipVideo) {
+          setTimeout(async () => {
+            try {
+              if (!pipVideo.paused) {
+                await pipVideo.play();
+              }
+              pipVideo.style.transform = 'translateZ(0)';
+            } catch (_) {}
+          }, 50);
+        }
       }
     }
   }
+
+  // Global leavepictureinpicture listener
+  document.addEventListener('leavepictureinpicture', (event) => {
+    autoPipEntered = false;
+    const video = event.target;
+    if (video && video.tagName === 'VIDEO') {
+      setTimeout(async () => {
+        try {
+          if (!video.paused) {
+            await video.play();
+          }
+          video.style.transform = 'translateZ(0)';
+        } catch (_) {}
+      }, 50);
+    }
+  }, { passive: true });
 
   document.addEventListener('visibilitychange', handleVisibilityChange, { passive: true });
 
@@ -495,25 +524,17 @@
     } catch (_) {}
   }
 
-  // Chrome MediaSession native auto-pip hook (injected into main page to register with browser subsystem)
+  // Register mediaSession auto-pip hook safely without violating site CSP (no inline script elements)
   try {
-    const script = document.createElement('script');
-    script.textContent = `
-      try {
-        if ('mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession) {
-          navigator.mediaSession.setActionHandler('enterpictureinpicture', async () => {
-            const v = document.querySelector('video');
-            if (v && !document.pictureInPictureElement) {
-              if (v.disablePictureInPicture) v.disablePictureInPicture = false;
-              v.removeAttribute('disablepictureinpicture');
-              await v.requestPictureInPicture();
-            }
-          });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && typeof navigator.mediaSession?.setActionHandler === 'function') {
+      navigator.mediaSession.setActionHandler('enterpictureinpicture', async () => {
+        const v = getActivePlayingVideo();
+        if (v && !document.pictureInPictureElement) {
+          unlockVideoPiP(v);
+          await v.requestPictureInPicture();
         }
-      } catch (_) {}
-    `;
-    (document.head || document.documentElement).appendChild(script);
-    script.remove();
+      });
+    }
   } catch (_) {}
 
   // Targeted MutationObserver
