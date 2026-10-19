@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const defaultSpeedHint = document.getElementById('defaultSpeedHint');
   const musicBypassToggle = document.getElementById('musicBypassToggle');
   const autoPipToggle = document.getElementById('autoPipToggle');
+  const smartAutoPauseToggle = document.getElementById('smartAutoPauseToggle');
   const musicNotice = document.getElementById('musicNotice');
 
   // State
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isGloballyEnabled = true;
   let disabledDomains = [];
   let autoPipEnabled = true;
+  let smartAutoPause = true;
   let currentTabDomain = '';
   let activeTabMediaCount = 0;
   let activeTabIsMusic = false;
@@ -244,6 +246,10 @@ document.addEventListener('DOMContentLoaded', () => {
       autoPipEnabled = Boolean(data[STORAGE_KEYS.AUTO_PIP_ENABLED]);
       if (autoPipToggle) autoPipToggle.checked = autoPipEnabled;
     }
+    if (data[STORAGE_KEYS.SMART_AUTO_PAUSE] !== undefined) {
+      smartAutoPause = Boolean(data[STORAGE_KEYS.SMART_AUTO_PAUSE]);
+      if (smartAutoPauseToggle) smartAutoPauseToggle.checked = smartAutoPause;
+    }
 
     updateSpeedUI(currentSpeed);
     updateDefaultHint(defaultSpeed);
@@ -370,7 +376,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 10. Save Default Button Event
+  // 10. Smart Auto-Pause Toggle Event (Media Coordinator)
+  if (smartAutoPauseToggle) {
+    smartAutoPauseToggle.addEventListener('change', (e) => {
+      smartAutoPause = e.target.checked;
+      chrome.storage.sync.set({ [STORAGE_KEYS.SMART_AUTO_PAUSE]: smartAutoPause });
+
+      sendToActiveTab({
+        type: MESSAGE_TYPES.SET_SMART_AUTO_PAUSE,
+        enabled: smartAutoPause
+      });
+    });
+  }
+
+  // 11. Save Default Button Event
   if (makeDefaultBtn) {
     makeDefaultBtn.addEventListener('click', () => {
       defaultSpeed = currentSpeed;

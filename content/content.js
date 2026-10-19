@@ -20,7 +20,8 @@
     SMART_MUSIC_BYPASS: 'smartMusicBypass',
     IS_GLOBALLY_ENABLED: 'isGloballyEnabled',
     DISABLED_DOMAINS: 'disabledDomains',
-    AUTO_PIP_ENABLED: 'autoPipEnabled'
+    AUTO_PIP_ENABLED: 'autoPipEnabled',
+    SMART_AUTO_PAUSE: 'smartAutoPause'
   };
 
   const MESSAGE_TYPES = {
@@ -30,6 +31,11 @@
     SET_GLOBAL_ACTIVE: 'SET_GLOBAL_ACTIVE',
     SET_DOMAIN_ACTIVE: 'SET_DOMAIN_ACTIVE',
     SET_AUTO_PIP: 'SET_AUTO_PIP',
+    SET_SMART_AUTO_PAUSE: 'SET_SMART_AUTO_PAUSE',
+    PAUSE_OTHER_MEDIA: 'PAUSE_OTHER_MEDIA',
+    PAUSE_MEDIA: 'PAUSE_MEDIA',
+    MEDIA_STARTED_PLAYING: 'MEDIA_STARTED_PLAYING',
+    TOGGLE_PIP: 'TOGGLE_PIP',
     STATUS_UPDATE: 'RUNNY_STATUS_UPDATE'
   };
 
@@ -62,6 +68,7 @@
   let isGloballyEnabled = true;
   let disabledDomains = [];
   let autoPipEnabled = true;
+  let smartAutoPause = true;
   let isCurrentMediaMusic = false;
   let lastMusicCheckTime = 0;
   let cachedMusicResult = false;
@@ -102,7 +109,9 @@
     STORAGE_KEYS.DEFAULT_SPEED,
     STORAGE_KEYS.SMART_MUSIC_BYPASS,
     STORAGE_KEYS.IS_GLOBALLY_ENABLED,
-    STORAGE_KEYS.DISABLED_DOMAINS
+    STORAGE_KEYS.DISABLED_DOMAINS,
+    STORAGE_KEYS.AUTO_PIP_ENABLED,
+    STORAGE_KEYS.SMART_AUTO_PAUSE
   ], (data) => {
     if (data[STORAGE_KEYS.CURRENT_SPEED] !== undefined) {
       activeSpeed = clampSpeed(data[STORAGE_KEYS.CURRENT_SPEED]);
@@ -121,6 +130,9 @@
     }
     if (data[STORAGE_KEYS.AUTO_PIP_ENABLED] !== undefined) {
       autoPipEnabled = Boolean(data[STORAGE_KEYS.AUTO_PIP_ENABLED]);
+    }
+    if (data[STORAGE_KEYS.SMART_AUTO_PAUSE] !== undefined) {
+      smartAutoPause = Boolean(data[STORAGE_KEYS.SMART_AUTO_PAUSE]);
     }
     evaluateAndApplySpeed();
   });
@@ -141,10 +153,15 @@
       isGloballyEnabled = Boolean(changes[STORAGE_KEYS.IS_GLOBALLY_ENABLED].newValue);
     }
     if (changes[STORAGE_KEYS.DISABLED_DOMAINS]) {
-      disabledDomains = (changes[STORAGE_KEYS.DISABLED_DOMAINS].newValue || []).map(d => d.toLowerCase());
+      disabledDomains = Array.isArray(changes[STORAGE_KEYS.DISABLED_DOMAINS].newValue)
+        ? changes[STORAGE_KEYS.DISABLED_DOMAINS].newValue.map(d => d.toLowerCase())
+        : [];
     }
     if (changes[STORAGE_KEYS.AUTO_PIP_ENABLED]) {
       autoPipEnabled = Boolean(changes[STORAGE_KEYS.AUTO_PIP_ENABLED].newValue);
+    }
+    if (changes[STORAGE_KEYS.SMART_AUTO_PAUSE]) {
+      smartAutoPause = Boolean(changes[STORAGE_KEYS.SMART_AUTO_PAUSE].newValue);
     }
     evaluateAndApplySpeed();
   });
@@ -225,39 +242,91 @@
       return true;
     }
 
-    // 3. YouTube Metadata Inspection
+    // 3. YouTube Deep Metadata & Video Song Inspection
     if (host.includes('youtube.com')) {
+      // 3a. Genre Meta Tag
       const metaGenre = document.querySelector('meta[itemprop="genre"]');
       if (metaGenre?.content?.toLowerCase().includes('music')) {
         cachedMusicResult = true;
         return true;
       }
 
-      if (document.querySelector('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]')) {
+      // 3b. Official YouTube Music Icon SVG path (Category 10 musical note icon in description)
+      if (document.querySelector('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]') ||
+          document.querySelector('path[d*="M12 3v9.28a4.39 4.39 0 00-1.5-.28"]')) {
         cachedMusicResult = true;
         return true;
       }
 
-      const channelOwner = document.querySelector('#owner-name, #channel-name, ytd-channel-name');
+      // 3c. Official Artist Channel / VEVO / Music Labels
+      const channelOwner = document.querySelector('#owner-name, #channel-name, ytd-channel-name, #upload-info #text');
       if (channelOwner?.textContent) {
         const name = channelOwner.textContent.trim().toLowerCase();
-        if (name.endsWith('- topic') || name.includes('vevo')) {
+        if (name.endsWith('- topic') ||
+            name.includes('vevo') ||
+            name.includes('records') ||
+            name.includes('music') ||
+            name.includes('t-series') ||
+            name.includes('zee music') ||
+            name.includes('sony music') ||
+            name.includes('saregama') ||
+            name.includes('speed records') ||
+            name.includes('yrf') ||
+            name.includes('tips official')) {
           cachedMusicResult = true;
           return true;
         }
       }
 
-      const musicSection = document.querySelector('ytd-metadata-row-container-renderer');
-      if (musicSection?.textContent?.toLowerCase().includes('music')) {
+      // 3d. Official Artist Note Badge (verified musical note badge next to channel name)
+      if (document.querySelector('ytd-badge-supported-renderer [aria-label*="Official Artist"], yt-icon.badge-style-type-verified-artist, [aria-label="Official Artist Channel"]')) {
         cachedMusicResult = true;
         return true;
       }
+
+      // 3e. Title Inspection: Standard industry naming conventions for music & video songs
+      const titleElem = document.querySelector('h1.ytd-watch-metadata, #title h1, h1.title');
+      const titleText = (titleElem?.textContent || document.title || '').toLowerCase();
+      
+      const MUSIC_TITLE_REGEX = /\b(official\s*(music\s*video|video|audio|lyric\s*video|track|song|visualizer)|music\s*video|video\s*song|full\s*song|lyric\s*video|audio\s*song|remix|acoustic\s*version|live\s*performance|original\s*soundtrack|soundtrack|ost)\b|\[(official\s*(music\s*)?video|audio|lyrics)]|\((official\s*(music\s*)?video|audio|lyrics)\)/i;
+      if (MUSIC_TITLE_REGEX.test(titleText)) {
+        cachedMusicResult = true;
+        return true;
+      }
+
+      // 3f. YouTube Description Structured Music Panel ("Song", "Artist", "Licensed to YouTube by")
+      const musicSection = document.querySelector('ytd-metadata-row-container-renderer, #structured-description, ytd-expander.ytd-video-secondary-info-renderer');
+      if (musicSection?.textContent) {
+        const text = musicSection.textContent.toLowerCase();
+        if (text.includes('licensed to youtube by') ||
+            text.includes('song\n') ||
+            text.includes('artist\n') ||
+            (text.includes('music in this video') && !text.includes('licensed to youtube by: none'))) {
+          cachedMusicResult = true;
+          return true;
+        }
+      }
+
+      // 3g. JSON-LD Microdata Embedded in DOM
+      const jsonLd = document.querySelectorAll('script[type="application/ld+json"]');
+      for (let i = 0; i < jsonLd.length; i++) {
+        try {
+          const content = jsonLd[i].textContent;
+          if (content.includes('"MusicVideoObject"') || content.includes('"MusicRecording"') || content.includes('"genre":"Music"')) {
+            cachedMusicResult = true;
+            return true;
+          }
+        } catch (_) {}
+      }
     }
 
-    // 4. MediaSession Album tag
-    if ('mediaSession' in navigator && navigator.mediaSession.metadata?.album) {
-      cachedMusicResult = true;
-      return true;
+    // 4. MediaSession Metadata (Album or Artist present without podcast indicator)
+    if ('mediaSession' in navigator && navigator.mediaSession.metadata) {
+      const meta = navigator.mediaSession.metadata;
+      if (meta.album) {
+        cachedMusicResult = true;
+        return true;
+      }
     }
 
     cachedMusicResult = false;
@@ -307,7 +376,17 @@
     hookedElements.add(media);
     trackedMediaElements.add(media);
 
-    media.addEventListener('play', () => evaluateAndApplySpeed(), { passive: true });
+    media.addEventListener('play', () => {
+      evaluateAndApplySpeed();
+      if (smartAutoPause && isRunnyActiveOnThisPage() && !media.paused) {
+        try {
+          chrome.runtime.sendMessage({
+            type: MESSAGE_TYPES.MEDIA_STARTED_PLAYING,
+            domain: getCurrentDomain()
+          }).catch(() => {});
+        } catch (_) {}
+      }
+    }, { passive: true });
     media.addEventListener('loadedmetadata', () => evaluateAndApplySpeed(), { passive: true });
     media.addEventListener('ratechange', () => {
       const target = getEffectiveSpeed();
@@ -471,16 +550,27 @@
         } catch (_) {}
         autoPipEntered = false;
 
-        // Force frame decode and repaint so player is immediately live
+        // Force frame decode and repaint so player is immediately live across YouTube, JioHotstar, Prime Video
         if (pipVideo) {
-          setTimeout(async () => {
+          const wakeVideo = async () => {
             try {
-              if (!pipVideo.paused) {
+              if (pipVideo.paused) {
+                // If it was paused during PiP exit, nudge currentTime marginally to trigger frame buffer draw
+                const t = pipVideo.currentTime;
+                pipVideo.currentTime = t > 0.05 ? t - 0.01 : 0.01;
+                pipVideo.currentTime = t;
+              } else {
                 await pipVideo.play();
               }
+              // Force GPU layer composition reflow
+              pipVideo.style.display = 'none';
+              void pipVideo.offsetHeight; // force reflow
+              pipVideo.style.display = '';
               pipVideo.style.transform = 'translateZ(0)';
             } catch (_) {}
-          }, 50);
+          };
+          setTimeout(wakeVideo, 40);
+          setTimeout(wakeVideo, 180);
         }
       }
     }
@@ -491,14 +581,23 @@
     autoPipEntered = false;
     const video = event.target;
     if (video && video.tagName === 'VIDEO') {
-      setTimeout(async () => {
+      const restoreVideo = async () => {
         try {
           if (!video.paused) {
             await video.play();
+          } else {
+            const t = video.currentTime;
+            video.currentTime = t > 0.05 ? t - 0.01 : 0.01;
+            video.currentTime = t;
           }
+          video.style.display = 'none';
+          void video.offsetHeight;
+          video.style.display = '';
           video.style.transform = 'translateZ(0)';
         } catch (_) {}
-      }, 50);
+      };
+      setTimeout(restoreVideo, 40);
+      setTimeout(restoreVideo, 180);
     }
   }, { passive: true });
 
@@ -603,6 +702,29 @@
           success: true,
           autoPipEnabled: autoPipEnabled
         });
+        break;
+      }
+      case MESSAGE_TYPES.SET_SMART_AUTO_PAUSE: {
+        smartAutoPause = Boolean(request.enabled);
+        sendResponse({
+          success: true,
+          smartAutoPause: smartAutoPause
+        });
+        break;
+      }
+      case MESSAGE_TYPES.PAUSE_OTHER_MEDIA: {
+        // Only pause if this tab is NOT the active tab or user explicitly wants single media source
+        if (smartAutoPause && isRunnyActiveOnThisPage() && trackedMediaElements.size > 0) {
+          for (const media of trackedMediaElements) {
+            try {
+              if (!media.paused && media.duration > 0 && !media.ended) {
+                media.pause();
+                showSpeedHUD(null, false, '⏸️ Paused (Another Media Playing)');
+              }
+            } catch (_) {}
+          }
+        }
+        sendResponse({ success: true });
         break;
       }
       case MESSAGE_TYPES.TOGGLE_PIP: {

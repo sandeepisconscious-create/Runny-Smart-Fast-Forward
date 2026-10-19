@@ -36,11 +36,39 @@ chrome.runtime.onInstalled.addListener(() => {
     if (data[STORAGE_KEYS.AUTO_PIP_ENABLED] === undefined) {
       defaults[STORAGE_KEYS.AUTO_PIP_ENABLED] = true;
     }
+    if (data[STORAGE_KEYS.SMART_AUTO_PAUSE] === undefined) {
+      defaults[STORAGE_KEYS.SMART_AUTO_PAUSE] = true;
+    }
 
     if (Object.keys(defaults).length > 0) {
       chrome.storage.sync.set(defaults);
     }
   });
+});
+
+// Coordinate multiple media tabs (e.g. JioHotstar vs YouTube: auto-pause the other when one starts playing)
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === MESSAGE_TYPES.MEDIA_STARTED_PLAYING) {
+    chrome.storage.sync.get([STORAGE_KEYS.SMART_AUTO_PAUSE, STORAGE_KEYS.IS_GLOBALLY_ENABLED], (data) => {
+      if (data[STORAGE_KEYS.IS_GLOBALLY_ENABLED] === false) return;
+      if (data[STORAGE_KEYS.SMART_AUTO_PAUSE] === false) return;
+
+      const sourceTabId = sender?.tab?.id;
+      // Broadcast pause command to all other open tabs playing media
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id && tab.id !== sourceTabId && !tab.url?.startsWith('chrome://')) {
+            chrome.tabs.sendMessage(tab.id, {
+              type: MESSAGE_TYPES.PAUSE_OTHER_MEDIA,
+              reason: 'another_media_started'
+            }).catch(() => {});
+          }
+        });
+      });
+    });
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Handle registered keyboard commands
