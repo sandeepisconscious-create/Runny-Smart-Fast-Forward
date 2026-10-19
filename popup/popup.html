@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Fast Forward</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <img class="logo-icon" src="../icons/icon48.png" alt="Runny Logo">
+        <span class="title">RUNNY</span>
+      </div>
+      <div class="status-indicator" id="statusBadge">
+        <span class="dot"></span>
+        <span class="status-text" id="statusLabel">Active</span>
+      </div>
+    </header>
+
+    <!-- Speed Selector Section -->
+    <section class="section">
+      <div class="section-label">Playback Speed</div>
+      <div class="speed-grid" id="speedButtons">
+        <button class="speed-btn" data-speed="1">1.0×</button>
+        <button class="speed-btn" data-speed="1.25">1.25×</button>
+        <button class="speed-btn" data-speed="1.5">1.5×</button>
+        <button class="speed-btn" data-speed="1.75">1.75×</button>
+        <button class="speed-btn" data-speed="2">2.0×</button>
+      </div>
+    </section>
+
+    <!-- Default Speed Toggle -->
+    <section class="section action-section">
+      <div class="row">
+        <div class="label-group">
+          <span class="primary-text">Set as Default Speed</span>
+          <span class="sub-text" id="defaultSpeedHint">Current default: 1.25×</span>
+        </div>
+        <button class="action-btn" id="makeDefaultBtn" title="Set selected speed as default">
+          Save Default
+        </button>
+      </div>
+    </section>
+
+    <!-- Music Bypass Status Box -->
+    <div class="info-card" id="musicNotice">
+      <div class="info-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+      </div>
+      <div class="info-content">
+        <div class="info-title" id="infoTitle">Smart Music Protection</div>
+        <div class="info-desc" id="infoDesc">Speed resets to 1.0× automatically when music is playing.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
