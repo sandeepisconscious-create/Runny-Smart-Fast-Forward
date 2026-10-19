@@ -1,40 +1,67 @@
-// Runny Background Service Worker
+/**
+ * Runny - Background Service Worker
+ * Handles installation defaults, cross-tab syncing, and global keyboard shortcuts.
+ */
+
+import { STORAGE_KEYS, SPEED_LIMITS, MESSAGE_TYPES, clampSpeed } from '../shared/constants.js';
+
+// Initialize defaults on install
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(['defaultSpeed', 'currentSpeed', 'smartMusicBypass'], (data) => {
+  chrome.storage.sync.get([
+    STORAGE_KEYS.DEFAULT_SPEED,
+    STORAGE_KEYS.CURRENT_SPEED,
+    STORAGE_KEYS.SMART_MUSIC_BYPASS
+  ], (data) => {
     const defaults = {};
-    if (data.defaultSpeed === undefined) defaults.defaultSpeed = 1.25;
-    if (data.currentSpeed === undefined) defaults.currentSpeed = 1.25;
-    if (data.smartMusicBypass === undefined) defaults.smartMusicBypass = true;
-    
+    if (data[STORAGE_KEYS.DEFAULT_SPEED] === undefined) {
+      defaults[STORAGE_KEYS.DEFAULT_SPEED] = SPEED_LIMITS.DEFAULT;
+    }
+    if (data[STORAGE_KEYS.CURRENT_SPEED] === undefined) {
+      defaults[STORAGE_KEYS.CURRENT_SPEED] = SPEED_LIMITS.DEFAULT;
+    }
+    if (data[STORAGE_KEYS.SMART_MUSIC_BYPASS] === undefined) {
+      defaults[STORAGE_KEYS.SMART_MUSIC_BYPASS] = true;
+    }
+
     if (Object.keys(defaults).length > 0) {
       chrome.storage.sync.set(defaults);
     }
   });
 });
 
-// Handle global keyboard shortcuts
+// Handle registered keyboard commands
 chrome.commands.onCommand.addListener((command) => {
-  chrome.storage.sync.get(['currentSpeed', 'defaultSpeed'], (data) => {
-    let speed = parseFloat(data.currentSpeed || data.defaultSpeed || 1.25);
+  chrome.storage.sync.get([STORAGE_KEYS.CURRENT_SPEED, STORAGE_KEYS.DEFAULT_SPEED], (data) => {
+    const fallbackSpeed = data[STORAGE_KEYS.DEFAULT_SPEED] ?? SPEED_LIMITS.DEFAULT;
+    let speed = parseFloat(data[STORAGE_KEYS.CURRENT_SPEED] ?? fallbackSpeed);
 
-    if (command === 'increase-speed') {
-      speed = Math.min(4.0, Math.round((speed + 0.25) * 100) / 100);
-    } else if (command === 'decrease-speed') {
-      speed = Math.max(0.25, Math.round((speed - 0.25) * 100) / 100);
-    } else if (command === 'reset-speed') {
-      speed = speed === 1.0 ? parseFloat(data.defaultSpeed || 1.25) : 1.0;
+    switch (command) {
+      case 'increase-speed':
+        speed = clampSpeed(speed + SPEED_LIMITS.STEP_LARGE);
+        break;
+      case 'decrease-speed':
+        speed = clampSpeed(speed - SPEED_LIMITS.STEP_LARGE);
+        break;
+      case 'reset-speed':
+        speed = (speed === SPEED_LIMITS.NORMAL) ? parseFloat(fallbackSpeed) : SPEED_LIMITS.NORMAL;
+        break;
+      default:
+        return;
     }
 
-    chrome.storage.sync.set({ currentSpeed: speed });
+    chrome.storage.sync.set({ [STORAGE_KEYS.CURRENT_SPEED]: speed });
 
-    // Broadcast to active tab
+    // Notify the active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0 && tabs[0].id) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          type: 'SET_SPEED',
+      const activeTab = tabs[0];
+      if (activeTab?.id) {
+        chrome.tabs.sendMessage(activeTab.id, {
+          type: MESSAGE_TYPES.SET_SPEED,
           speed: speed,
           showBadge: true
-        }).catch(() => {});
+        }).catch(() => {
+          // Tab might be an internal page or not have content script injected yet
+        });
       }
     });
   });

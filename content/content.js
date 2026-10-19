@@ -1,61 +1,130 @@
+/**
+ * Runny - Content Script
+ * Runs in the context of web pages and embedded iframes.
+ * Intercepts media elements, detects music tracks, and enforces target playback rate.
+ */
+
 (() => {
-  let activeSpeed = 1.25;
-  let defaultSpeed = 1.25;
+  // Prevent duplicate execution if already injected in the same context
+  if (window.__runny_content_script_loaded) return;
+  window.__runny_content_script_loaded = true;
+
+  // Constants
+  const STORAGE_KEYS = {
+    CURRENT_SPEED: 'currentSpeed',
+    DEFAULT_SPEED: 'defaultSpeed',
+    SMART_MUSIC_BYPASS: 'smartMusicBypass'
+  };
+
+  const MESSAGE_TYPES = {
+    GET_STATUS: 'GET_RUNNY_STATUS',
+    SET_SPEED: 'SET_SPEED',
+    SET_MUSIC_BYPASS: 'SET_MUSIC_BYPASS',
+    STATUS_UPDATE: 'RUNNY_STATUS_UPDATE'
+  };
+
+  const SPEED_LIMITS = {
+    DEFAULT: 1.25,
+    NORMAL: 1.0,
+    MIN: 0.25,
+    MAX: 4.0
+  };
+
+  const MUSIC_DOMAINS = [
+    'music.youtube.com',
+    'spotify.com',
+    'soundcloud.com',
+    'music.apple.com',
+    'deezer.com',
+    'tidal.com',
+    'bandcamp.com',
+    'pandora.com',
+    'jiosaavn.com',
+    'gaana.com',
+    'music.amazon.',
+    'audiomack.com'
+  ];
+
+  // Runtime State
+  let activeSpeed = SPEED_LIMITS.DEFAULT;
+  let defaultSpeed = SPEED_LIMITS.DEFAULT;
   let smartMusicBypass = true;
   let isCurrentMediaMusic = false;
+  let hudTimeout = null;
 
-  // Load initial settings
-  chrome.storage.sync.get(['currentSpeed', 'defaultSpeed', 'smartMusicBypass'], (data) => {
-    if (data.currentSpeed !== undefined) activeSpeed = parseFloat(data.currentSpeed);
-    if (data.defaultSpeed !== undefined) defaultSpeed = parseFloat(data.defaultSpeed);
-    if (data.smartMusicBypass !== undefined) smartMusicBypass = data.smartMusicBypass;
+  // Safe speed clamping
+  function clampSpeed(val) {
+    const num = parseFloat(val);
+    if (isNaN(num)) return SPEED_LIMITS.DEFAULT;
+    return Math.round(Math.min(SPEED_LIMITS.MAX, Math.max(SPEED_LIMITS.MIN, num)) * 100) / 100;
+  }
+
+  // Initial configuration load from storage
+  chrome.storage.sync.get([
+    STORAGE_KEYS.CURRENT_SPEED,
+    STORAGE_KEYS.DEFAULT_SPEED,
+    STORAGE_KEYS.SMART_MUSIC_BYPASS
+  ], (data) => {
+    if (data[STORAGE_KEYS.CURRENT_SPEED] !== undefined) {
+      activeSpeed = clampSpeed(data[STORAGE_KEYS.CURRENT_SPEED]);
+    }
+    if (data[STORAGE_KEYS.DEFAULT_SPEED] !== undefined) {
+      defaultSpeed = clampSpeed(data[STORAGE_KEYS.DEFAULT_SPEED]);
+    }
+    if (data[STORAGE_KEYS.SMART_MUSIC_BYPASS] !== undefined) {
+      smartMusicBypass = Boolean(data[STORAGE_KEYS.SMART_MUSIC_BYPASS]);
+    }
     evaluateAndApplySpeed();
   });
 
-  // Listen for storage changes across tabs
+  // Storage listener for cross-tab synchronization
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync') return;
-    if (changes.currentSpeed) {
-      activeSpeed = parseFloat(changes.currentSpeed.newValue);
+
+    if (changes[STORAGE_KEYS.CURRENT_SPEED]) {
+      activeSpeed = clampSpeed(changes[STORAGE_KEYS.CURRENT_SPEED].newValue);
     }
-    if (changes.defaultSpeed) {
-      defaultSpeed = parseFloat(changes.defaultSpeed.newValue);
+    if (changes[STORAGE_KEYS.DEFAULT_SPEED]) {
+      defaultSpeed = clampSpeed(changes[STORAGE_KEYS.DEFAULT_SPEED].newValue);
     }
-    if (changes.smartMusicBypass) {
-      smartMusicBypass = changes.smartMusicBypass.newValue;
+    if (changes[STORAGE_KEYS.SMART_MUSIC_BYPASS]) {
+      smartMusicBypass = Boolean(changes[STORAGE_KEYS.SMART_MUSIC_BYPASS].newValue);
     }
     evaluateAndApplySpeed();
   });
 
   /**
-   * On-Screen Display (OSD) HUD Badge
+   * Displays the on-screen display (HUD) badge
+   * @param {number|string} speedText
+   * @param {boolean} [isMusic=false]
    */
-  let hudTimeout = null;
   function showSpeedHUD(speedText, isMusic = false) {
     let hud = document.getElementById('runny-speed-hud');
     if (!hud) {
       hud = document.createElement('div');
       hud.id = 'runny-speed-hud';
-      hud.style.position = 'fixed';
-      hud.style.top = '24px';
-      hud.style.right = '24px';
-      hud.style.zIndex = '2147483647';
-      hud.style.backgroundColor = 'rgba(9, 9, 11, 0.88)';
-      hud.style.color = '#ffffff';
-      hud.style.border = '1px solid #3f3f46';
-      hud.style.borderRadius = '8px';
-      hud.style.padding = '8px 14px';
-      hud.style.fontSize = '14px';
-      hud.style.fontWeight = '700';
-      hud.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      hud.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.5)';
-      hud.style.backdropFilter = 'blur(8px)';
-      hud.style.pointerEvents = 'none';
-      hud.style.transition = 'opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
-      document.body.appendChild(hud);
+      Object.assign(hud.style, {
+        position: 'fixed',
+        top: '24px',
+        right: '24px',
+        zIndex: '2147483647',
+        backgroundColor: 'rgba(9, 9, 11, 0.88)',
+        color: '#ffffff',
+        border: '1px solid #3f3f46',
+        borderRadius: '8px',
+        padding: '8px 14px',
+        fontSize: '14px',
+        fontWeight: '700',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(8px)',
+        pointerEvents: 'none',
+        transition: 'opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
+      });
+      document.body?.appendChild(hud);
     }
 
-    hud.textContent = isMusic ? `🎵 Music Detected (1.0×)` : `⚡ ${speedText}×`;
+    hud.textContent = isMusic ? '🎵 Music Detected (1.0×)' : `⚡ ${speedText}×`;
     hud.style.opacity = '1';
     hud.style.transform = 'translateY(0px)';
 
@@ -67,47 +136,29 @@
   }
 
   /**
-   * Universal Music Detection:
-   * 1. Music streaming domains
-   * 2. Standalone <audio> playback
-   * 3. YouTube specific metadata, categories, Topic channels, and artist badges
-   * 4. MediaSession metadata
+   * Analyzes page context and active media to detect music
+   * @returns {boolean}
    */
   function checkIsMusic() {
     const host = window.location.hostname.toLowerCase();
 
-    // 1. Known music/audio platform domains
-    const musicDomains = [
-      'music.youtube.com',
-      'spotify.com',
-      'soundcloud.com',
-      'music.apple.com',
-      'deezer.com',
-      'tidal.com',
-      'bandcamp.com',
-      'pandora.com',
-      'jiosaavn.com',
-      'gaana.com',
-      'music.amazon.',
-      'audiomack.com'
-    ];
-    if (musicDomains.some(d => host.includes(d))) {
+    // 1. Dedicated streaming platforms
+    if (MUSIC_DOMAINS.some(domain => host.includes(domain))) {
       return true;
     }
 
-    // 2. Pure <audio> playback detection (audio playing, no video)
+    // 2. Pure audio playback (e.g. podcast players, sound feeds)
     const audios = document.querySelectorAll('audio');
     const videos = document.querySelectorAll('video');
     const hasActiveAudio = Array.from(audios).some(a => !a.paused && a.duration > 0);
     const hasActiveVideo = Array.from(videos).some(v => !v.paused && v.duration > 0);
-
     if (hasActiveAudio && !hasActiveVideo) {
       return true;
     }
 
-    // 3. YouTube-specific deep checks
+    // 3. YouTube specific metadata & channel verification
     if (host.includes('youtube.com')) {
-      // Script payload checks (categoryId 10 / category: "Music")
+      // Inline player response checks
       try {
         const scripts = document.querySelectorAll('script');
         for (const script of scripts) {
@@ -120,35 +171,34 @@
         }
       } catch (_) {}
 
-      // Meta schema tag
+      // Genre metadata
       try {
         const metaGenre = document.querySelector('meta[itemprop="genre"]');
-        if (metaGenre && metaGenre.content && metaGenre.content.toLowerCase().includes('music')) {
+        if (metaGenre?.content?.toLowerCase().includes('music')) {
           return true;
         }
       } catch (_) {}
 
-      // Topic channel detection (e.g. "Artist Name - Topic") & Official Artist badges
+      // Channel identity (Topic channels / VEVO / Artist notes)
       try {
         const channelOwner = document.querySelector('#owner-name, #channel-name, ytd-channel-name');
-        if (channelOwner && channelOwner.textContent) {
-          const channelText = channelOwner.textContent.trim().toLowerCase();
-          if (channelText.endsWith('- topic') || channelText.includes('vevo')) {
+        if (channelOwner?.textContent) {
+          const name = channelOwner.textContent.trim().toLowerCase();
+          if (name.endsWith('- topic') || name.includes('vevo')) {
             return true;
           }
         }
 
-        // Official artist channel badge (music note icon on YouTube)
-        const artistBadges = document.querySelectorAll('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]');
-        if (artistBadges.length > 0) {
+        // Official artist musical note badge
+        if (document.querySelector('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]')) {
           return true;
         }
       } catch (_) {}
 
-      // Description badges & "Music in this video" sections
+      // Description badges
       try {
         const musicSection = document.querySelector('ytd-metadata-row-container-renderer');
-        if (musicSection && musicSection.textContent.toLowerCase().includes('music')) {
+        if (musicSection?.textContent?.toLowerCase().includes('music')) {
           return true;
         }
 
@@ -162,45 +212,54 @@
       } catch (_) {}
     }
 
-    // 4. Navigator MediaSession API (album tag presence)
-    if ('mediaSession' in navigator && navigator.mediaSession.metadata) {
-      const meta = navigator.mediaSession.metadata;
-      if (meta.album && meta.album.trim().length > 0) {
-        return true;
-      }
+    // 4. MediaSession metadata tags
+    if ('mediaSession' in navigator && navigator.mediaSession.metadata?.album) {
+      return true;
     }
 
     return false;
   }
 
+  /**
+   * Calculates the target speed based on bypass state and media type
+   * @returns {number}
+   */
   function getEffectiveSpeed() {
     if (smartMusicBypass && isCurrentMediaMusic) {
-      return 1.0;
+      return SPEED_LIMITS.NORMAL;
     }
-    return activeSpeed || defaultSpeed || 1.0;
+    return activeSpeed || defaultSpeed || SPEED_LIMITS.NORMAL;
   }
 
-  function applySpeedToMedia(element) {
-    if (!element) return;
+  /**
+   * Applies the speed and pitch preservation to an HTMLMediaElement
+   * @param {HTMLMediaElement} media
+   */
+  function applySpeedToMedia(media) {
+    if (!media) return;
     const target = getEffectiveSpeed();
 
-    // YouTube-standard pitch preservation (keeps voices natural, prevents chipmunk distortion)
-    if ('preservesPitch' in element && element.preservesPitch !== true) {
-      element.preservesPitch = true;
+    // Standardize pitch correction across all browser engines
+    if ('preservesPitch' in media && media.preservesPitch !== true) {
+      media.preservesPitch = true;
     }
-    if ('webkitPreservesPitch' in element && element.webkitPreservesPitch !== true) {
-      element.webkitPreservesPitch = true;
+    if ('webkitPreservesPitch' in media && media.webkitPreservesPitch !== true) {
+      media.webkitPreservesPitch = true;
     }
-    if ('mozPreservesPitch' in element && element.mozPreservesPitch !== true) {
-      element.mozPreservesPitch = true;
+    if ('mozPreservesPitch' in media && media.mozPreservesPitch !== true) {
+      media.mozPreservesPitch = true;
     }
 
-    if (element.playbackRate !== target) {
-      element.playbackRate = target;
+    if (media.playbackRate !== target) {
+      media.playbackRate = target;
     }
   }
 
-  // Get all media elements in the document including shadow roots
+  /**
+   * Recursively finds all media elements, including inside Shadow DOMs
+   * @param {Document|ShadowRoot} root
+   * @returns {HTMLMediaElement[]}
+   */
   function getAllMediaElements(root = document) {
     const elements = [];
     const standardMedia = root.querySelectorAll('video, audio');
@@ -216,6 +275,10 @@
     return elements;
   }
 
+  /**
+   * Re-evaluates media type and applies speed to all active players
+   * @param {boolean} [showFeedback=false]
+   */
   function evaluateAndApplySpeed(showFeedback = false) {
     const wasMusic = isCurrentMediaMusic;
     isCurrentMediaMusic = checkIsMusic();
@@ -228,10 +291,10 @@
       showSpeedHUD(getEffectiveSpeed(), isCurrentMediaMusic);
     }
 
-    // Broadcast status to popup
+    // Broadcast status to popup if active
     try {
       chrome.runtime.sendMessage({
-        type: 'RUNNY_STATUS_UPDATE',
+        type: MESSAGE_TYPES.STATUS_UPDATE,
         isMusic: isCurrentMediaMusic,
         effectiveSpeed: getEffectiveSpeed(),
         activeSpeed: activeSpeed,
@@ -241,7 +304,7 @@
     } catch (_) {}
   }
 
-  // Observe dynamic additions & shadow DOM players
+  // MutationObserver to attach to dynamically inserted video/audio tags
   const observer = new MutationObserver(() => {
     const mediaElements = getAllMediaElements();
     mediaElements.forEach(element => {
@@ -269,7 +332,7 @@
     subtree: true
   });
 
-  // SPA navigation handling
+  // SPA navigation events
   ['yt-navigate-finish', 'popstate', 'hashchange', 'locationchange'].forEach(evt => {
     window.addEventListener(evt, () => {
       setTimeout(evaluateAndApplySpeed, 300);
@@ -277,37 +340,46 @@
     });
   });
 
-  // Handle messages from popup & background keyboard shortcuts
+  // Message router for popup and background actions
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'GET_RUNNY_STATUS') {
-      isCurrentMediaMusic = checkIsMusic();
-      const mediaList = getAllMediaElements();
-      sendResponse({
-        isMusic: isCurrentMediaMusic,
-        effectiveSpeed: getEffectiveSpeed(),
-        activeSpeed: activeSpeed,
-        smartMusicBypass: smartMusicBypass,
-        mediaCount: mediaList.length
-      });
-    } else if (request.type === 'SET_SPEED') {
-      activeSpeed = parseFloat(request.speed);
-      evaluateAndApplySpeed(request.showBadge || false);
-      sendResponse({
-        success: true,
-        effectiveSpeed: getEffectiveSpeed()
-      });
-    } else if (request.type === 'SET_MUSIC_BYPASS') {
-      smartMusicBypass = Boolean(request.enabled);
-      evaluateAndApplySpeed(true);
-      sendResponse({
-        success: true,
-        smartMusicBypass: smartMusicBypass
-      });
+    switch (request.type) {
+      case MESSAGE_TYPES.GET_STATUS: {
+        isCurrentMediaMusic = checkIsMusic();
+        const mediaList = getAllMediaElements();
+        sendResponse({
+          isMusic: isCurrentMediaMusic,
+          effectiveSpeed: getEffectiveSpeed(),
+          activeSpeed: activeSpeed,
+          smartMusicBypass: smartMusicBypass,
+          mediaCount: mediaList.length
+        });
+        break;
+      }
+      case MESSAGE_TYPES.SET_SPEED: {
+        activeSpeed = clampSpeed(request.speed);
+        evaluateAndApplySpeed(Boolean(request.showBadge));
+        sendResponse({
+          success: true,
+          effectiveSpeed: getEffectiveSpeed()
+        });
+        break;
+      }
+      case MESSAGE_TYPES.SET_MUSIC_BYPASS: {
+        smartMusicBypass = Boolean(request.enabled);
+        evaluateAndApplySpeed(true);
+        sendResponse({
+          success: true,
+          smartMusicBypass: smartMusicBypass
+        });
+        break;
+      }
+      default:
+        break;
     }
     return true;
   });
 
-  // Periodic rate guard
+  // Periodic heartbeat to counter external playback rate overrides
   setInterval(() => {
     const mediaList = getAllMediaElements();
     if (mediaList.length > 0) {
@@ -324,6 +396,6 @@
     }
   }, 1500);
 
-  // Initial scan
+  // Initial pass
   setTimeout(evaluateAndApplySpeed, 500);
 })();
