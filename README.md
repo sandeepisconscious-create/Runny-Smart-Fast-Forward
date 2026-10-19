@@ -53,6 +53,9 @@ We all watch content faster to save hours of time. But current solutions have tw
 - **Visual Default Indicator**: A minimalist pip highlights your current default preset at a glance.
 - **Music Protection Toggle**: Turn auto-music protection on or off with a switch.
 - **Universal Player Compatibility**: Supports Shadow DOM players, embedded video iframes, and modern single-page apps (SPAs).
+- **Auto-PiP on Tab Switch**:
+  - **Instant Keyboard Shortcut**: Press **`Alt + P`** (or **`Option + P`** on Mac) at any time to pop active videos in/out of PiP.
+  - **Seamless Native Tab-Switch Auto-PiP**: Enable `chrome://flags/#auto-picture-in-picture-for-video-playback` in Chrome to let the browser automatically pop active videos into PiP whenever switching tabs without security blocks.
 - **Monochromatic Minimal Dark UI**: Built with a sleek, distraction-free aesthetic that looks right at home in modern browsers.
 - **Privacy-First & 100% Free**: No tracking, no external server calls, no telemetry. Everything runs locally in your browser.
 

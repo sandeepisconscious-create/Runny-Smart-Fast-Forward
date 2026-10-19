@@ -320,6 +320,10 @@
       }
     }, { passive: true });
 
+    if (media.tagName === 'VIDEO') {
+      attachFloatingPipButton(media);
+    }
+
     applySpeedToMedia(media);
   }
 
@@ -470,6 +474,26 @@
   }
 
   document.addEventListener('visibilitychange', handleVisibilityChange, { passive: true });
+
+  // Inject floating mini PiP button overlay on videos
+  function attachFloatingPipButton(video) {
+    if (!video || video.dataset.runnyPipAttached) return;
+    video.dataset.runnyPipAttached = 'true';
+
+    // Unlock DRM restrictions immediately
+    unlockVideoPiP(video);
+
+    // Watch for disablePictureInPicture attribute mutations by sites like Prime/Hotstar
+    try {
+      const pipAttrObserver = new MutationObserver(() => {
+        if (video.disablePictureInPicture) video.disablePictureInPicture = false;
+        if (video.hasAttribute('disablepictureinpicture')) {
+          video.removeAttribute('disablepictureinpicture');
+        }
+      });
+      pipAttrObserver.observe(video, { attributes: true, attributeFilter: ['disablepictureinpicture'] });
+    } catch (_) {}
+  }
 
   // Chrome MediaSession native auto-pip hook (injected into main page to register with browser subsystem)
   try {
