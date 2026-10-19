@@ -42,7 +42,7 @@ We all watch content faster to save hours of time. But current solutions have tw
 
 ## ✨ Features
 
-- **YouTube-Standard Speeds**: Seamless stepping between **1.0×**, **1.25×**, **1.5×**, **1.75×**, and **2.0×**.
+- **YouTube-Inspired Speeds**: Quick preset buttons for **1.0×**, **1.25×**, **1.5×**, **2.0×**, and **3.0×**.
 - **Fine-Tune Custom Slider & Steppers**: Need **2.25×**, **2.5×**, or **0.85×**? Use the slider or `+` / `−` steppers to dial in custom speeds.
 - **On-Screen Display (OSD HUD)**: A subtle, translucent badge displays on-screen whenever speed changes or music is detected so you never have to leave full-screen.
 - **Global Keyboard Shortcuts**:

@@ -28,7 +28,7 @@
     NORMAL: 1.0
   };
 
-  const STANDARD_SPEED_PRESETS = [1.0, 1.25, 1.5, 1.75, 2.0];
+  const STANDARD_SPEED_PRESETS = [1.0, 1.25, 1.5, 2.0, 3.0];
 
   const MUSIC_DOMAINS = [
     'music.youtube.com',
