@@ -73,17 +73,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (response.isMusic && smartMusicBypass) {
       statusLabel.textContent = 'Music (1.0×)';
-      musicNotice.classList.add('music-active');
-      infoTitle.textContent = 'Music Playing';
-      infoDesc.textContent = 'Speed is locked to 1.0× for optimal listening.';
+      if (musicNotice) {
+        musicNotice.style.display = 'flex';
+        musicNotice.classList.add('music-active');
+      }
     } else {
       const activeDisplay = response.effectiveSpeed ?? currentSpeed;
       statusLabel.textContent = `${formatSpeedDisplay(activeDisplay)} Active`;
-      musicNotice.classList.remove('music-active');
-      infoTitle.textContent = 'Smart Music Protection';
-      infoDesc.textContent = smartMusicBypass
-        ? 'Speed resets to 1.0× automatically when music is playing.'
-        : 'Music protection is currently disabled.';
+      if (musicNotice) {
+        musicNotice.style.display = 'none';
+        musicNotice.classList.remove('music-active');
+      }
     }
   }
 
