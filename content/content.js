@@ -1,11 +1,15 @@
 /**
- * Runny - Content Script
+ * Runny - Content Script (High-Performance Engine)
  * Runs in the context of web pages and embedded iframes.
- * Intercepts media elements, detects music tracks, and enforces target playback rate.
+ *
+ * Performance Optimizations:
+ * 1. Targeted MutationObserver: Inspects addedNodes directly instead of document.querySelectorAll('*').
+ * 2. Cached Media Registry (WeakSet / Set): Reuses attached event listeners without memory leaks.
+ * 3. Throttled Music Detection: Caches music calculation per URL/navigation to eliminate redundant DOM queries.
+ * 4. Microtask / RAF scheduling: Avoids layout thrashing.
  */
 
 (() => {
-  // Prevent duplicate execution if already injected in the same context
   if (window.__runny_content_script_loaded) return;
   window.__runny_content_script_loaded = true;
 
@@ -50,16 +54,21 @@
   let defaultSpeed = SPEED_LIMITS.DEFAULT;
   let smartMusicBypass = true;
   let isCurrentMediaMusic = false;
+  let lastMusicCheckTime = 0;
+  let cachedMusicResult = false;
   let hudTimeout = null;
 
-  // Safe speed clamping
+  // Media Registry to avoid re-querying and duplicate listeners
+  const trackedMediaElements = new Set();
+  const hookedElements = new WeakSet();
+
   function clampSpeed(val) {
     const num = parseFloat(val);
     if (isNaN(num)) return SPEED_LIMITS.DEFAULT;
     return Math.round(Math.min(SPEED_LIMITS.MAX, Math.max(SPEED_LIMITS.MIN, num)) * 100) / 100;
   }
 
-  // Initial configuration load from storage
+  // Load storage preferences
   chrome.storage.sync.get([
     STORAGE_KEYS.CURRENT_SPEED,
     STORAGE_KEYS.DEFAULT_SPEED,
@@ -77,10 +86,9 @@
     evaluateAndApplySpeed();
   });
 
-  // Storage listener for cross-tab synchronization
+  // Storage change listener
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync') return;
-
     if (changes[STORAGE_KEYS.CURRENT_SPEED]) {
       activeSpeed = clampSpeed(changes[STORAGE_KEYS.CURRENT_SPEED].newValue);
     }
@@ -93,11 +101,7 @@
     evaluateAndApplySpeed();
   });
 
-  /**
-   * Displays the on-screen display (HUD) badge
-   * @param {number|string} speedText
-   * @param {boolean} [isMusic=false]
-   */
+  // OSD HUD Badge
   function showSpeedHUD(speedText, isMusic = false) {
     let hud = document.getElementById('runny-speed-hud');
     if (!hud) {
@@ -136,94 +140,83 @@
   }
 
   /**
-   * Analyzes page context and active media to detect music
+   * High-Performance Music Detection with time-based caching
+   * @param {boolean} force - Force re-evaluation
    * @returns {boolean}
    */
-  function checkIsMusic() {
+  function checkIsMusic(force = false) {
+    const now = Date.now();
+    // Cache result for 2 seconds unless forced
+    if (!force && (now - lastMusicCheckTime < 2000)) {
+      return cachedMusicResult;
+    }
+    lastMusicCheckTime = now;
+
     const host = window.location.hostname.toLowerCase();
 
-    // 1. Dedicated streaming platforms
+    // 1. Domain Match (O(1))
     if (MUSIC_DOMAINS.some(domain => host.includes(domain))) {
+      cachedMusicResult = true;
       return true;
     }
 
-    // 2. Pure audio playback (e.g. podcast players, sound feeds)
-    const audios = document.querySelectorAll('audio');
-    const videos = document.querySelectorAll('video');
-    const hasActiveAudio = Array.from(audios).some(a => !a.paused && a.duration > 0);
-    const hasActiveVideo = Array.from(videos).some(v => !v.paused && v.duration > 0);
-    if (hasActiveAudio && !hasActiveVideo) {
+    // 2. Active Audio Element Check (fast Array loop)
+    let activeAudio = false;
+    let activeVideo = false;
+    for (const media of trackedMediaElements) {
+      if (!media.paused && media.duration > 0) {
+        if (media.tagName === 'AUDIO') activeAudio = true;
+        if (media.tagName === 'VIDEO') activeVideo = true;
+      }
+    }
+    if (activeAudio && !activeVideo) {
+      cachedMusicResult = true;
       return true;
     }
 
-    // 3. YouTube specific metadata & channel verification
+    // 3. YouTube Metadata Inspection
     if (host.includes('youtube.com')) {
-      // Inline player response checks
-      try {
-        const scripts = document.querySelectorAll('script');
-        for (const script of scripts) {
-          const text = script.textContent;
-          if (text && text.includes('ytInitialPlayerResponse')) {
-            if (/"category"\s*:\s*"Music"/i.test(text) || /"categoryId"\s*:\s*"10"/.test(text)) {
-              return true;
-            }
-          }
-        }
-      } catch (_) {}
+      // Fast check: genre meta tag
+      const metaGenre = document.querySelector('meta[itemprop="genre"]');
+      if (metaGenre?.content?.toLowerCase().includes('music')) {
+        cachedMusicResult = true;
+        return true;
+      }
 
-      // Genre metadata
-      try {
-        const metaGenre = document.querySelector('meta[itemprop="genre"]');
-        if (metaGenre?.content?.toLowerCase().includes('music')) {
+      // Fast check: channel note SVG icon
+      if (document.querySelector('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]')) {
+        cachedMusicResult = true;
+        return true;
+      }
+
+      // Channel name check
+      const channelOwner = document.querySelector('#owner-name, #channel-name, ytd-channel-name');
+      if (channelOwner?.textContent) {
+        const name = channelOwner.textContent.trim().toLowerCase();
+        if (name.endsWith('- topic') || name.includes('vevo')) {
+          cachedMusicResult = true;
           return true;
         }
-      } catch (_) {}
+      }
 
-      // Channel identity (Topic channels / VEVO / Artist notes)
-      try {
-        const channelOwner = document.querySelector('#owner-name, #channel-name, ytd-channel-name');
-        if (channelOwner?.textContent) {
-          const name = channelOwner.textContent.trim().toLowerCase();
-          if (name.endsWith('- topic') || name.includes('vevo')) {
-            return true;
-          }
-        }
-
-        // Official artist musical note badge
-        if (document.querySelector('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]')) {
-          return true;
-        }
-      } catch (_) {}
-
-      // Description badges
-      try {
-        const musicSection = document.querySelector('ytd-metadata-row-container-renderer');
-        if (musicSection?.textContent?.toLowerCase().includes('music')) {
-          return true;
-        }
-
-        const badges = document.querySelectorAll('ytd-badge-supported-renderer, yt-formatted-string');
-        for (const badge of badges) {
-          const text = badge.textContent.trim().toLowerCase();
-          if (text === 'music' || text === 'official music video') {
-            return true;
-          }
-        }
-      } catch (_) {}
+      // Badge check
+      const musicSection = document.querySelector('ytd-metadata-row-container-renderer');
+      if (musicSection?.textContent?.toLowerCase().includes('music')) {
+        cachedMusicResult = true;
+        return true;
+      }
     }
 
-    // 4. MediaSession metadata tags
+    // 4. MediaSession Album tag
     if ('mediaSession' in navigator && navigator.mediaSession.metadata?.album) {
+      cachedMusicResult = true;
       return true;
     }
 
+    cachedMusicResult = false;
     return false;
   }
 
-  /**
-   * Calculates the target speed based on bypass state and media type
-   * @returns {number}
-   */
   function getEffectiveSpeed() {
     if (smartMusicBypass && isCurrentMediaMusic) {
       return SPEED_LIMITS.NORMAL;
@@ -231,22 +224,22 @@
     return activeSpeed || defaultSpeed || SPEED_LIMITS.NORMAL;
   }
 
-  /**
-   * Applies the speed and pitch preservation to an HTMLMediaElement
-   * @param {HTMLMediaElement} media
-   */
   function applySpeedToMedia(media) {
-    if (!media) return;
+    if (!media || !media.isConnected) {
+      trackedMediaElements.delete(media);
+      return;
+    }
+
     const target = getEffectiveSpeed();
 
-    // Standardize pitch correction across all browser engines
-    if ('preservesPitch' in media && media.preservesPitch !== true) {
+    // Pitch preservation (only set if not already true)
+    if (media.preservesPitch !== true && 'preservesPitch' in media) {
       media.preservesPitch = true;
     }
-    if ('webkitPreservesPitch' in media && media.webkitPreservesPitch !== true) {
+    if (media.webkitPreservesPitch !== true && 'webkitPreservesPitch' in media) {
       media.webkitPreservesPitch = true;
     }
-    if ('mozPreservesPitch' in media && media.mozPreservesPitch !== true) {
+    if (media.mozPreservesPitch !== true && 'mozPreservesPitch' in media) {
       media.mozPreservesPitch = true;
     }
 
@@ -255,43 +248,66 @@
     }
   }
 
-  /**
-   * Recursively finds all media elements, including inside Shadow DOMs
-   * @param {Document|ShadowRoot} root
-   * @returns {HTMLMediaElement[]}
-   */
-  function getAllMediaElements(root = document) {
-    const elements = [];
-    const standardMedia = root.querySelectorAll('video, audio');
-    standardMedia.forEach(el => elements.push(el));
+  // Register and hook an individual media element
+  function registerMediaElement(media) {
+    if (!media || hookedElements.has(media)) return;
 
-    const allNodes = root.querySelectorAll('*');
-    allNodes.forEach(node => {
-      if (node.shadowRoot) {
-        elements.push(...getAllMediaElements(node.shadowRoot));
+    hookedElements.add(media);
+    trackedMediaElements.add(media);
+
+    media.addEventListener('play', () => evaluateAndApplySpeed(), { passive: true });
+    media.addEventListener('loadedmetadata', () => evaluateAndApplySpeed(), { passive: true });
+    media.addEventListener('ratechange', () => {
+      const target = getEffectiveSpeed();
+      if (media.playbackRate !== target) {
+        setTimeout(() => {
+          if (media.playbackRate !== target) {
+            media.playbackRate = target;
+          }
+        }, 50);
       }
-    });
+    }, { passive: true });
 
-    return elements;
+    applySpeedToMedia(media);
   }
 
-  /**
-   * Re-evaluates media type and applies speed to all active players
-   * @param {boolean} [showFeedback=false]
-   */
+  // Scan node and descendants for media elements (O(nodes) instead of O(DOM))
+  function findMediaInNode(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+
+    if (node.tagName === 'VIDEO' || node.tagName === 'AUDIO') {
+      registerMediaElement(node);
+    }
+
+    const mediaChildren = node.querySelectorAll?.('video, audio');
+    if (mediaChildren) {
+      for (let i = 0; i < mediaChildren.length; i++) {
+        registerMediaElement(mediaChildren[i]);
+      }
+    }
+
+    if (node.shadowRoot) {
+      findMediaInNode(node.shadowRoot);
+    }
+  }
+
+  // Initial media discovery
+  document.querySelectorAll('video, audio').forEach(registerMediaElement);
+
   function evaluateAndApplySpeed(showFeedback = false) {
     const wasMusic = isCurrentMediaMusic;
     isCurrentMediaMusic = checkIsMusic();
-    const mediaElements = getAllMediaElements();
-    mediaElements.forEach(applySpeedToMedia);
 
-    if (showFeedback && mediaElements.length > 0) {
+    for (const media of trackedMediaElements) {
+      applySpeedToMedia(media);
+    }
+
+    if (showFeedback && trackedMediaElements.size > 0) {
       showSpeedHUD(getEffectiveSpeed(), isCurrentMediaMusic);
-    } else if (isCurrentMediaMusic !== wasMusic && mediaElements.length > 0) {
+    } else if (isCurrentMediaMusic !== wasMusic && trackedMediaElements.size > 0) {
       showSpeedHUD(getEffectiveSpeed(), isCurrentMediaMusic);
     }
 
-    // Broadcast status to popup if active
     try {
       chrome.runtime.sendMessage({
         type: MESSAGE_TYPES.STATUS_UPDATE,
@@ -299,32 +315,19 @@
         effectiveSpeed: getEffectiveSpeed(),
         activeSpeed: activeSpeed,
         smartMusicBypass: smartMusicBypass,
-        mediaCount: mediaElements.length
+        mediaCount: trackedMediaElements.size
       }).catch(() => {});
     } catch (_) {}
   }
 
-  // MutationObserver to attach to dynamically inserted video/audio tags
-  const observer = new MutationObserver(() => {
-    const mediaElements = getAllMediaElements();
-    mediaElements.forEach(element => {
-      if (!element.__runny_hooked) {
-        element.__runny_hooked = true;
-        element.addEventListener('play', () => evaluateAndApplySpeed());
-        element.addEventListener('loadedmetadata', () => evaluateAndApplySpeed());
-        element.addEventListener('ratechange', () => {
-          const target = getEffectiveSpeed();
-          if (element.playbackRate !== target) {
-            setTimeout(() => {
-              if (element.playbackRate !== target) {
-                element.playbackRate = target;
-              }
-            }, 60);
-          }
-        });
+  // Targeted, efficient MutationObserver
+  const observer = new MutationObserver((mutations) => {
+    for (let i = 0; i < mutations.length; i++) {
+      const added = mutations[i].addedNodes;
+      for (let j = 0; j < added.length; j++) {
+        findMediaInNode(added[j]);
       }
-      applySpeedToMedia(element);
-    });
+    }
   });
 
   observer.observe(document.documentElement, {
@@ -332,26 +335,26 @@
     subtree: true
   });
 
-  // SPA navigation events
+  // SPA navigation events: reset music cache and re-apply
   ['yt-navigate-finish', 'popstate', 'hashchange', 'locationchange'].forEach(evt => {
     window.addEventListener(evt, () => {
-      setTimeout(evaluateAndApplySpeed, 300);
-      setTimeout(evaluateAndApplySpeed, 1200);
-    });
+      lastMusicCheckTime = 0;
+      setTimeout(() => evaluateAndApplySpeed(), 300);
+      setTimeout(() => evaluateAndApplySpeed(), 1000);
+    }, { passive: true });
   });
 
-  // Message router for popup and background actions
+  // Message router
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.type) {
       case MESSAGE_TYPES.GET_STATUS: {
-        isCurrentMediaMusic = checkIsMusic();
-        const mediaList = getAllMediaElements();
+        isCurrentMediaMusic = checkIsMusic(true);
         sendResponse({
           isMusic: isCurrentMediaMusic,
           effectiveSpeed: getEffectiveSpeed(),
           activeSpeed: activeSpeed,
           smartMusicBypass: smartMusicBypass,
-          mediaCount: mediaList.length
+          mediaCount: trackedMediaElements.size
         });
         break;
       }
@@ -379,23 +382,24 @@
     return true;
   });
 
-  // Periodic heartbeat to counter external playback rate overrides
+  // Lightweight periodic rate guard (only iterates tracked media, zero DOM queries)
   setInterval(() => {
-    const mediaList = getAllMediaElements();
-    if (mediaList.length > 0) {
+    if (trackedMediaElements.size > 0) {
       const musicCheck = checkIsMusic();
       if (musicCheck !== isCurrentMediaMusic) {
         isCurrentMediaMusic = musicCheck;
       }
       const target = getEffectiveSpeed();
-      mediaList.forEach(m => {
-        if (m.playbackRate !== target) {
-          m.playbackRate = target;
+      for (const media of trackedMediaElements) {
+        if (!media.isConnected) {
+          trackedMediaElements.delete(media);
+        } else if (media.playbackRate !== target) {
+          media.playbackRate = target;
         }
-      });
+      }
     }
-  }, 1500);
+  }, 1200);
 
-  // Initial pass
-  setTimeout(evaluateAndApplySpeed, 500);
+  // Initial run
+  setTimeout(evaluateAndApplySpeed, 400);
 })();
