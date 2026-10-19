@@ -1,0 +1,7 @@
+# Archives
+runny-v1.0.0.zip
+*.zip
+
+# OS Files
+.DS_Store
+Thumbs.db
