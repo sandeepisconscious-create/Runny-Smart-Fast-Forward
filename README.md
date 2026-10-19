@@ -42,6 +42,9 @@ We all watch content faster to save hours of time. But current solutions have tw
 
 ## ✨ Features
 
+- **Global Fast Forward Toggle**: Master switch to turn the extension ON or completely OFF across your entire browser with a single click.
+- **Current Website Pause**: Easily pause or whitelist specific sites (e.g. `youtube.com`, `coursera.org`) while keeping fast-forward active everywhere else.
+- **Dynamic Status Indicators**: Header indicator clearly displays whether Runny is **ACTIVE** (green dot), **PAUSED** on the current website (yellow dot), or **DISABLED** globally.
 - **YouTube-Inspired Speeds**: Quick preset buttons for **1.0×**, **1.25×**, **1.5×**, **2.0×**, and **3.0×**.
 - **Fine-Tune Custom Slider & Steppers**: Need **2.25×**, **2.5×**, or **0.85×**? Use the slider or `+` / `−` steppers to dial in custom speeds.
 - **On-Screen Display (OSD HUD)**: A subtle, translucent badge displays on-screen whenever speed changes or music is detected so you never have to leave full-screen.

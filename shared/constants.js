@@ -7,13 +7,17 @@
   const STORAGE_KEYS = {
     CURRENT_SPEED: 'currentSpeed',
     DEFAULT_SPEED: 'defaultSpeed',
-    SMART_MUSIC_BYPASS: 'smartMusicBypass'
+    SMART_MUSIC_BYPASS: 'smartMusicBypass',
+    IS_GLOBALLY_ENABLED: 'isGloballyEnabled',
+    DISABLED_DOMAINS: 'disabledDomains'
   };
 
   const MESSAGE_TYPES = {
     GET_STATUS: 'GET_RUNNY_STATUS',
     SET_SPEED: 'SET_SPEED',
     SET_MUSIC_BYPASS: 'SET_MUSIC_BYPASS',
+    SET_GLOBAL_ACTIVE: 'SET_GLOBAL_ACTIVE',
+    SET_DOMAIN_ACTIVE: 'SET_DOMAIN_ACTIVE',
     STATUS_UPDATE: 'RUNNY_STATUS_UPDATE'
   };
 

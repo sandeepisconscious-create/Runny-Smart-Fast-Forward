@@ -1,6 +1,6 @@
 /**
  * Runny - Popup Controller
- * Manages speed selection, fine-tuning, settings persistence, and tab synchronization.
+ * Manages master global & per-site activation, speed selection, settings persistence, and tab synchronization.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -12,7 +12,20 @@ document.addEventListener('DOMContentLoaded', () => {
     formatSpeedDisplay
   } = window.RunnyShared;
 
-  // DOM Elements
+  // Header & Status Indicators
+  const statusBadge = document.getElementById('statusBadge');
+  const statusLabel = document.getElementById('statusLabel');
+
+  // Master Control DOM Elements
+  const globalPowerBtn = document.getElementById('globalPowerBtn');
+  const globalStateText = document.getElementById('globalStateText');
+  const globalSubText = document.getElementById('globalSubText');
+  const domainNameText = document.getElementById('domainNameText');
+  const domainToggle = document.getElementById('domainToggle');
+  const domainStateText = document.getElementById('domainStateText');
+  const speedControlsContainer = document.getElementById('speedControlsContainer');
+
+  // Speed Controls DOM Elements
   const speedButtons = document.querySelectorAll('.speed-btn');
   const speedSlider = document.getElementById('speedSlider');
   const customSpeedVal = document.getElementById('customSpeedVal');
@@ -21,21 +34,106 @@ document.addEventListener('DOMContentLoaded', () => {
   const makeDefaultBtn = document.getElementById('makeDefaultBtn');
   const defaultSpeedHint = document.getElementById('defaultSpeedHint');
   const musicBypassToggle = document.getElementById('musicBypassToggle');
-  const statusLabel = document.getElementById('statusLabel');
-  const statusBadge = document.getElementById('statusBadge');
   const musicNotice = document.getElementById('musicNotice');
-  const infoTitle = document.getElementById('infoTitle');
-  const infoDesc = document.getElementById('infoDesc');
 
   // State
   let currentSpeed = SPEED_LIMITS.DEFAULT;
   let defaultSpeed = SPEED_LIMITS.DEFAULT;
   let smartMusicBypass = true;
+  let isGloballyEnabled = true;
+  let disabledDomains = [];
+  let currentTabDomain = '';
+  let activeTabMediaCount = 0;
+  let activeTabIsMusic = false;
+
+  function extractDomain(url) {
+    if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')) {
+      return '';
+    }
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname.toLowerCase();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function isDomainDisabled(domain) {
+    if (!domain) return false;
+    return disabledDomains.some(d => domain === d || domain.endsWith('.' + d));
+  }
 
   /**
-   * Updates visual states of buttons, slider, and default pips
-   * @param {number} speed
+   * Updates the visual status badge (Active vs Paused vs Disabled)
    */
+  function updateStatusIndicator() {
+    statusBadge.className = 'status-indicator';
+
+    if (!isGloballyEnabled) {
+      statusBadge.classList.add('state-off');
+      statusLabel.textContent = 'Disabled';
+      return;
+    }
+
+    if (!currentTabDomain) {
+      statusBadge.classList.add('state-off');
+      statusLabel.textContent = 'Standby';
+      return;
+    }
+
+    if (isDomainDisabled(currentTabDomain)) {
+      statusBadge.classList.add('state-paused');
+      statusLabel.textContent = 'Paused';
+      return;
+    }
+
+    if (activeTabIsMusic && smartMusicBypass) {
+      statusBadge.classList.add('state-music');
+      statusLabel.textContent = 'Music (1.0×)';
+      return;
+    }
+
+    statusBadge.classList.add('state-active');
+    statusLabel.textContent = `${formatSpeedDisplay(currentSpeed)} Active`;
+  }
+
+  /**
+   * Syncs master switch UI states
+   */
+  function updateMasterControlsUI() {
+    // Global Power Switch
+    globalPowerBtn.classList.toggle('active', isGloballyEnabled);
+    globalStateText.textContent = isGloballyEnabled ? 'ON' : 'OFF';
+    globalStateText.classList.toggle('is-off', !isGloballyEnabled);
+    globalSubText.textContent = isGloballyEnabled
+      ? 'Active across all web players'
+      : 'Extension is completely paused globally';
+
+    // Domain Switch
+    const siteAllowed = isGloballyEnabled && !isDomainDisabled(currentTabDomain);
+    const domainIsConfiguredActive = !isDomainDisabled(currentTabDomain);
+
+    if (currentTabDomain) {
+      domainNameText.textContent = currentTabDomain;
+      domainToggle.disabled = !isGloballyEnabled;
+      domainToggle.checked = domainIsConfiguredActive;
+      domainStateText.textContent = domainIsConfiguredActive ? 'ON' : 'PAUSED';
+      domainStateText.classList.toggle('is-off', !domainIsConfiguredActive);
+    } else {
+      domainNameText.textContent = 'No active webpage';
+      domainToggle.disabled = true;
+      domainToggle.checked = false;
+      domainStateText.textContent = 'OFF';
+      domainStateText.classList.add('is-off');
+    }
+
+    // Dim speed adjustments if paused or disabled
+    const canControlSpeed = isGloballyEnabled && !isDomainDisabled(currentTabDomain);
+    speedControlsContainer.classList.toggle('is-disabled', !canControlSpeed);
+
+    updateStatusIndicator();
+  }
+
   function updateSpeedUI(speed) {
     speedButtons.forEach((btn) => {
       const btnSpeed = parseFloat(btn.dataset.speed);
@@ -54,44 +152,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Updates the default speed hint message
-   * @param {number} speed
-   */
   function updateDefaultHint(speed) {
     if (defaultSpeedHint) {
       defaultSpeedHint.textContent = `Current default: ${formatSpeedDisplay(speed)}`;
     }
   }
 
-  /**
-   * Updates music card and status badge based on tab response
-   * @param {{ isMusic?: boolean, effectiveSpeed?: number }} response
-   */
   function handleStatusResponse(response) {
     if (!response) return;
 
-    if (response.isMusic && smartMusicBypass) {
-      statusLabel.textContent = 'Music (1.0×)';
+    activeTabIsMusic = Boolean(response.isMusic);
+    activeTabMediaCount = response.mediaCount || 0;
+
+    if (response.currentDomain) {
+      currentTabDomain = response.currentDomain;
+    }
+
+    if (activeTabIsMusic && smartMusicBypass && isGloballyEnabled && !isDomainDisabled(currentTabDomain)) {
       if (musicNotice) {
         musicNotice.style.display = 'flex';
         musicNotice.classList.add('music-active');
       }
     } else {
-      const activeDisplay = response.effectiveSpeed ?? currentSpeed;
-      statusLabel.textContent = `${formatSpeedDisplay(activeDisplay)} Active`;
       if (musicNotice) {
         musicNotice.style.display = 'none';
         musicNotice.classList.remove('music-active');
       }
     }
+
+    updateMasterControlsUI();
   }
 
-  /**
-   * Dispatches a message to the active tab
-   * @param {object} message
-   * @param {(response: any) => void} [callback]
-   */
   function sendToActiveTab(message, callback) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const activeTab = tabs[0];
@@ -106,15 +197,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * Applies and saves a new playback speed
-   * @param {number} rawSpeed
-   * @param {boolean} [showBadge=true]
-   */
   function applySpeed(rawSpeed, showBadge = true) {
     currentSpeed = clampSpeed(rawSpeed);
     updateSpeedUI(currentSpeed);
-
     chrome.storage.sync.set({ [STORAGE_KEYS.CURRENT_SPEED]: currentSpeed });
 
     sendToActiveTab({
@@ -123,16 +208,18 @@ document.addEventListener('DOMContentLoaded', () => {
       showBadge: showBadge
     }, (res) => {
       if (res?.effectiveSpeed) {
-        statusLabel.textContent = `${formatSpeedDisplay(res.effectiveSpeed)} Active`;
+        updateStatusIndicator();
       }
     });
   }
 
-  // 1. Initialize from storage
+  // 1. Initialize from Storage
   chrome.storage.sync.get([
     STORAGE_KEYS.CURRENT_SPEED,
     STORAGE_KEYS.DEFAULT_SPEED,
-    STORAGE_KEYS.SMART_MUSIC_BYPASS
+    STORAGE_KEYS.SMART_MUSIC_BYPASS,
+    STORAGE_KEYS.IS_GLOBALLY_ENABLED,
+    STORAGE_KEYS.DISABLED_DOMAINS
   ], (data) => {
     if (data[STORAGE_KEYS.CURRENT_SPEED] !== undefined) {
       currentSpeed = parseFloat(data[STORAGE_KEYS.CURRENT_SPEED]);
@@ -144,37 +231,86 @@ document.addEventListener('DOMContentLoaded', () => {
       smartMusicBypass = Boolean(data[STORAGE_KEYS.SMART_MUSIC_BYPASS]);
       if (musicBypassToggle) musicBypassToggle.checked = smartMusicBypass;
     }
+    if (data[STORAGE_KEYS.IS_GLOBALLY_ENABLED] !== undefined) {
+      isGloballyEnabled = Boolean(data[STORAGE_KEYS.IS_GLOBALLY_ENABLED]);
+    }
+    if (Array.isArray(data[STORAGE_KEYS.DISABLED_DOMAINS])) {
+      disabledDomains = data[STORAGE_KEYS.DISABLED_DOMAINS].map(d => d.toLowerCase());
+    }
 
     updateSpeedUI(currentSpeed);
     updateDefaultHint(defaultSpeed);
+    updateMasterControlsUI();
   });
 
-  // 2. Query initial active tab status
+  // 2. Query Active Tab for Domain & Tab State
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const activeTab = tabs[0];
-    if (!activeTab?.url || activeTab.url.startsWith('chrome://')) {
-      statusLabel.textContent = 'Standby';
-      statusBadge.style.opacity = '0.6';
+    if (activeTab?.url) {
+      currentTabDomain = extractDomain(activeTab.url);
+    }
+
+    updateMasterControlsUI();
+
+    if (!activeTab?.id || !currentTabDomain) {
       return;
     }
 
     chrome.tabs.sendMessage(activeTab.id, { type: MESSAGE_TYPES.GET_STATUS }, (response) => {
       if (chrome.runtime.lastError || !response) {
-        statusLabel.textContent = `${formatSpeedDisplay(currentSpeed)} Ready`;
+        updateStatusIndicator();
         return;
       }
       handleStatusResponse(response);
     });
   });
 
-  // 3. Preset button events
+  // 3. Global Master Switch Event
+  globalPowerBtn.addEventListener('click', () => {
+    isGloballyEnabled = !isGloballyEnabled;
+    chrome.storage.sync.set({ [STORAGE_KEYS.IS_GLOBALLY_ENABLED]: isGloballyEnabled });
+
+    updateMasterControlsUI();
+
+    // Broadcast change to active tab
+    sendToActiveTab({
+      type: MESSAGE_TYPES.SET_GLOBAL_ACTIVE,
+      enabled: isGloballyEnabled
+    }, handleStatusResponse);
+  });
+
+  // 4. Current Domain Switch Event
+  domainToggle.addEventListener('change', (e) => {
+    if (!currentTabDomain) return;
+
+    const shouldEnable = e.target.checked;
+    if (shouldEnable) {
+      // Remove from disabled list
+      disabledDomains = disabledDomains.filter(d => d !== currentTabDomain);
+    } else {
+      // Add to disabled list
+      if (!disabledDomains.includes(currentTabDomain)) {
+        disabledDomains.push(currentTabDomain);
+      }
+    }
+
+    chrome.storage.sync.set({ [STORAGE_KEYS.DISABLED_DOMAINS]: disabledDomains });
+    updateMasterControlsUI();
+
+    sendToActiveTab({
+      type: MESSAGE_TYPES.SET_DOMAIN_ACTIVE,
+      disabledDomains: disabledDomains
+    }, handleStatusResponse);
+  });
+
+  // 5. Preset Button Events
   speedButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       applySpeed(parseFloat(btn.dataset.speed));
     });
   });
 
-  // 4. Custom slider events
+  // 6. Custom Slider Events
   if (speedSlider) {
     speedSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
@@ -186,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 5. Stepper events
+  // 7. Stepper Events
   if (stepUpBtn) {
     stepUpBtn.addEventListener('click', () => {
       applySpeed(currentSpeed + SPEED_LIMITS.STEP_FINE);
@@ -199,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 6. Music bypass toggle event
+  // 8. Music Bypass Toggle Event
   if (musicBypassToggle) {
     musicBypassToggle.addEventListener('change', (e) => {
       smartMusicBypass = e.target.checked;
@@ -214,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7. Save as default button event
+  // 9. Save Default Button Event
   if (makeDefaultBtn) {
     makeDefaultBtn.addEventListener('click', () => {
       defaultSpeed = currentSpeed;

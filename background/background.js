@@ -13,7 +13,9 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get([
     STORAGE_KEYS.DEFAULT_SPEED,
     STORAGE_KEYS.CURRENT_SPEED,
-    STORAGE_KEYS.SMART_MUSIC_BYPASS
+    STORAGE_KEYS.SMART_MUSIC_BYPASS,
+    STORAGE_KEYS.IS_GLOBALLY_ENABLED,
+    STORAGE_KEYS.DISABLED_DOMAINS
   ], (data) => {
     const defaults = {};
     if (data[STORAGE_KEYS.DEFAULT_SPEED] === undefined) {
@@ -25,6 +27,12 @@ chrome.runtime.onInstalled.addListener(() => {
     if (data[STORAGE_KEYS.SMART_MUSIC_BYPASS] === undefined) {
       defaults[STORAGE_KEYS.SMART_MUSIC_BYPASS] = true;
     }
+    if (data[STORAGE_KEYS.IS_GLOBALLY_ENABLED] === undefined) {
+      defaults[STORAGE_KEYS.IS_GLOBALLY_ENABLED] = true;
+    }
+    if (!Array.isArray(data[STORAGE_KEYS.DISABLED_DOMAINS])) {
+      defaults[STORAGE_KEYS.DISABLED_DOMAINS] = [];
+    }
 
     if (Object.keys(defaults).length > 0) {
       chrome.storage.sync.set(defaults);
@@ -34,7 +42,16 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Handle registered keyboard commands
 chrome.commands.onCommand.addListener((command) => {
-  chrome.storage.sync.get([STORAGE_KEYS.CURRENT_SPEED, STORAGE_KEYS.DEFAULT_SPEED], (data) => {
+  chrome.storage.sync.get([
+    STORAGE_KEYS.CURRENT_SPEED,
+    STORAGE_KEYS.DEFAULT_SPEED,
+    STORAGE_KEYS.IS_GLOBALLY_ENABLED
+  ], (data) => {
+    // If globally disabled, do not process shortcut speed changes
+    if (data[STORAGE_KEYS.IS_GLOBALLY_ENABLED] === false) {
+      return;
+    }
+
     const fallbackSpeed = data[STORAGE_KEYS.DEFAULT_SPEED] ?? SPEED_LIMITS.DEFAULT;
     let speed = parseFloat(data[STORAGE_KEYS.CURRENT_SPEED] ?? fallbackSpeed);
 

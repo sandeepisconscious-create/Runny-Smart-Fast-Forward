@@ -17,13 +17,17 @@
   const STORAGE_KEYS = {
     CURRENT_SPEED: 'currentSpeed',
     DEFAULT_SPEED: 'defaultSpeed',
-    SMART_MUSIC_BYPASS: 'smartMusicBypass'
+    SMART_MUSIC_BYPASS: 'smartMusicBypass',
+    IS_GLOBALLY_ENABLED: 'isGloballyEnabled',
+    DISABLED_DOMAINS: 'disabledDomains'
   };
 
   const MESSAGE_TYPES = {
     GET_STATUS: 'GET_RUNNY_STATUS',
     SET_SPEED: 'SET_SPEED',
     SET_MUSIC_BYPASS: 'SET_MUSIC_BYPASS',
+    SET_GLOBAL_ACTIVE: 'SET_GLOBAL_ACTIVE',
+    SET_DOMAIN_ACTIVE: 'SET_DOMAIN_ACTIVE',
     STATUS_UPDATE: 'RUNNY_STATUS_UPDATE'
   };
 
@@ -53,6 +57,8 @@
   let activeSpeed = SPEED_LIMITS.DEFAULT;
   let defaultSpeed = SPEED_LIMITS.DEFAULT;
   let smartMusicBypass = true;
+  let isGloballyEnabled = true;
+  let disabledDomains = [];
   let isCurrentMediaMusic = false;
   let lastMusicCheckTime = 0;
   let cachedMusicResult = false;
@@ -68,11 +74,31 @@
     return Math.round(Math.min(SPEED_LIMITS.MAX, Math.max(SPEED_LIMITS.MIN, num)) * 100) / 100;
   }
 
+  function getCurrentDomain() {
+    try {
+      return window.location.hostname.toLowerCase();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function isDomainDisabled() {
+    const host = getCurrentDomain();
+    if (!host) return false;
+    return disabledDomains.some(d => host === d || host.endsWith('.' + d));
+  }
+
+  function isRunnyActiveOnThisPage() {
+    return isGloballyEnabled && !isDomainDisabled();
+  }
+
   // Load storage preferences
   chrome.storage.sync.get([
     STORAGE_KEYS.CURRENT_SPEED,
     STORAGE_KEYS.DEFAULT_SPEED,
-    STORAGE_KEYS.SMART_MUSIC_BYPASS
+    STORAGE_KEYS.SMART_MUSIC_BYPASS,
+    STORAGE_KEYS.IS_GLOBALLY_ENABLED,
+    STORAGE_KEYS.DISABLED_DOMAINS
   ], (data) => {
     if (data[STORAGE_KEYS.CURRENT_SPEED] !== undefined) {
       activeSpeed = clampSpeed(data[STORAGE_KEYS.CURRENT_SPEED]);
@@ -82,6 +108,12 @@
     }
     if (data[STORAGE_KEYS.SMART_MUSIC_BYPASS] !== undefined) {
       smartMusicBypass = Boolean(data[STORAGE_KEYS.SMART_MUSIC_BYPASS]);
+    }
+    if (data[STORAGE_KEYS.IS_GLOBALLY_ENABLED] !== undefined) {
+      isGloballyEnabled = Boolean(data[STORAGE_KEYS.IS_GLOBALLY_ENABLED]);
+    }
+    if (Array.isArray(data[STORAGE_KEYS.DISABLED_DOMAINS])) {
+      disabledDomains = data[STORAGE_KEYS.DISABLED_DOMAINS].map(d => d.toLowerCase());
     }
     evaluateAndApplySpeed();
   });
@@ -98,11 +130,17 @@
     if (changes[STORAGE_KEYS.SMART_MUSIC_BYPASS]) {
       smartMusicBypass = Boolean(changes[STORAGE_KEYS.SMART_MUSIC_BYPASS].newValue);
     }
+    if (changes[STORAGE_KEYS.IS_GLOBALLY_ENABLED]) {
+      isGloballyEnabled = Boolean(changes[STORAGE_KEYS.IS_GLOBALLY_ENABLED].newValue);
+    }
+    if (changes[STORAGE_KEYS.DISABLED_DOMAINS]) {
+      disabledDomains = (changes[STORAGE_KEYS.DISABLED_DOMAINS].newValue || []).map(d => d.toLowerCase());
+    }
     evaluateAndApplySpeed();
   });
 
   // OSD HUD Badge
-  function showSpeedHUD(speedText, isMusic = false) {
+  function showSpeedHUD(speedText, isMusic = false, customMessage = null) {
     let hud = document.getElementById('runny-speed-hud');
     if (!hud) {
       hud = document.createElement('div');
@@ -128,7 +166,11 @@
       document.body?.appendChild(hud);
     }
 
-    hud.textContent = isMusic ? '🎵 Music Detected (1.0×)' : `⚡ ${speedText}×`;
+    if (customMessage) {
+      hud.textContent = customMessage;
+    } else {
+      hud.textContent = isMusic ? '🎵 Music Detected (1.0×)' : `⚡ ${speedText}×`;
+    }
     hud.style.opacity = '1';
     hud.style.transform = 'translateY(0px)';
 
@@ -146,21 +188,20 @@
    */
   function checkIsMusic(force = false) {
     const now = Date.now();
-    // Cache result for 2 seconds unless forced
     if (!force && (now - lastMusicCheckTime < 2000)) {
       return cachedMusicResult;
     }
     lastMusicCheckTime = now;
 
-    const host = window.location.hostname.toLowerCase();
+    const host = getCurrentDomain();
 
-    // 1. Domain Match (O(1))
+    // 1. Domain Match
     if (MUSIC_DOMAINS.some(domain => host.includes(domain))) {
       cachedMusicResult = true;
       return true;
     }
 
-    // 2. Active Audio Element Check (fast Array loop)
+    // 2. Active Audio Element Check
     let activeAudio = false;
     let activeVideo = false;
     for (const media of trackedMediaElements) {
@@ -176,20 +217,17 @@
 
     // 3. YouTube Metadata Inspection
     if (host.includes('youtube.com')) {
-      // Fast check: genre meta tag
       const metaGenre = document.querySelector('meta[itemprop="genre"]');
       if (metaGenre?.content?.toLowerCase().includes('music')) {
         cachedMusicResult = true;
         return true;
       }
 
-      // Fast check: channel note SVG icon
       if (document.querySelector('path[d*="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21"]')) {
         cachedMusicResult = true;
         return true;
       }
 
-      // Channel name check
       const channelOwner = document.querySelector('#owner-name, #channel-name, ytd-channel-name');
       if (channelOwner?.textContent) {
         const name = channelOwner.textContent.trim().toLowerCase();
@@ -199,7 +237,6 @@
         }
       }
 
-      // Badge check
       const musicSection = document.querySelector('ytd-metadata-row-container-renderer');
       if (musicSection?.textContent?.toLowerCase().includes('music')) {
         cachedMusicResult = true;
@@ -218,6 +255,11 @@
   }
 
   function getEffectiveSpeed() {
+    // If globally disabled or paused on this website, remain at 1.0x normal
+    if (!isGloballyEnabled || isDomainDisabled()) {
+      return SPEED_LIMITS.NORMAL;
+    }
+
     if (smartMusicBypass && isCurrentMediaMusic) {
       return SPEED_LIMITS.NORMAL;
     }
@@ -232,7 +274,7 @@
 
     const target = getEffectiveSpeed();
 
-    // Pitch preservation (only set if not already true)
+    // Pitch preservation
     if (media.preservesPitch !== true && 'preservesPitch' in media) {
       media.preservesPitch = true;
     }
@@ -271,7 +313,7 @@
     applySpeedToMedia(media);
   }
 
-  // Scan node and descendants for media elements (O(nodes) instead of O(DOM))
+  // Scan node and descendants for media elements
   function findMediaInNode(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
 
@@ -294,7 +336,7 @@
   // Initial media discovery
   document.querySelectorAll('video, audio').forEach(registerMediaElement);
 
-  function evaluateAndApplySpeed(showFeedback = false) {
+  function evaluateAndApplySpeed(showFeedback = false, customHud = null) {
     const wasMusic = isCurrentMediaMusic;
     isCurrentMediaMusic = checkIsMusic();
 
@@ -302,9 +344,11 @@
       applySpeedToMedia(media);
     }
 
-    if (showFeedback && trackedMediaElements.size > 0) {
+    if (customHud) {
+      showSpeedHUD(null, false, customHud);
+    } else if (showFeedback && trackedMediaElements.size > 0) {
       showSpeedHUD(getEffectiveSpeed(), isCurrentMediaMusic);
-    } else if (isCurrentMediaMusic !== wasMusic && trackedMediaElements.size > 0) {
+    } else if (isCurrentMediaMusic !== wasMusic && trackedMediaElements.size > 0 && isRunnyActiveOnThisPage()) {
       showSpeedHUD(getEffectiveSpeed(), isCurrentMediaMusic);
     }
 
@@ -315,12 +359,15 @@
         effectiveSpeed: getEffectiveSpeed(),
         activeSpeed: activeSpeed,
         smartMusicBypass: smartMusicBypass,
+        isGloballyEnabled: isGloballyEnabled,
+        isDomainDisabled: isDomainDisabled(),
+        currentDomain: getCurrentDomain(),
         mediaCount: trackedMediaElements.size
       }).catch(() => {});
     } catch (_) {}
   }
 
-  // Targeted, efficient MutationObserver
+  // Targeted MutationObserver
   const observer = new MutationObserver((mutations) => {
     for (let i = 0; i < mutations.length; i++) {
       const added = mutations[i].addedNodes;
@@ -335,7 +382,7 @@
     subtree: true
   });
 
-  // SPA navigation events: reset music cache and re-apply
+  // SPA navigation events
   ['yt-navigate-finish', 'popstate', 'hashchange', 'locationchange'].forEach(evt => {
     window.addEventListener(evt, () => {
       lastMusicCheckTime = 0;
@@ -354,6 +401,9 @@
           effectiveSpeed: getEffectiveSpeed(),
           activeSpeed: activeSpeed,
           smartMusicBypass: smartMusicBypass,
+          isGloballyEnabled: isGloballyEnabled,
+          isDomainDisabled: isDomainDisabled(),
+          currentDomain: getCurrentDomain(),
           mediaCount: trackedMediaElements.size
         });
         break;
@@ -376,13 +426,36 @@
         });
         break;
       }
+      case MESSAGE_TYPES.SET_GLOBAL_ACTIVE: {
+        isGloballyEnabled = Boolean(request.enabled);
+        evaluateAndApplySpeed(true, isGloballyEnabled ? `⚡ Runny Active (${activeSpeed}×)` : '⏸️ Runny Disabled (1.0×)');
+        sendResponse({
+          success: true,
+          isGloballyEnabled: isGloballyEnabled,
+          effectiveSpeed: getEffectiveSpeed()
+        });
+        break;
+      }
+      case MESSAGE_TYPES.SET_DOMAIN_ACTIVE: {
+        if (Array.isArray(request.disabledDomains)) {
+          disabledDomains = request.disabledDomains.map(d => d.toLowerCase());
+        }
+        const paused = isDomainDisabled();
+        evaluateAndApplySpeed(true, paused ? `⏸️ Paused on ${getCurrentDomain()}` : `⚡ Active on ${getCurrentDomain()} (${activeSpeed}×)`);
+        sendResponse({
+          success: true,
+          isDomainDisabled: paused,
+          effectiveSpeed: getEffectiveSpeed()
+        });
+        break;
+      }
       default:
         break;
     }
     return true;
   });
 
-  // Lightweight periodic rate guard (only iterates tracked media, zero DOM queries)
+  // Lightweight periodic rate guard
   setInterval(() => {
     if (trackedMediaElements.size > 0) {
       const musicCheck = checkIsMusic();

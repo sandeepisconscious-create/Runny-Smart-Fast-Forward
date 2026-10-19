@@ -9,7 +9,9 @@
   --text-muted: #71717a;
   --accent-white: #ffffff;
   --accent-dark: #000000;
-  --status-active: #ffffff;
+  --status-active: #22c55e;
+  --status-paused: #eab308;
+  --status-off: #71717a;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -38,7 +40,7 @@ body {
   padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 14px;
 }
 
 /* Header */
@@ -72,10 +74,11 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 9999px;
+  transition: var(--transition);
 }
 
 .dot {
@@ -83,15 +86,211 @@ body {
   height: 6px;
   border-radius: 50%;
   background-color: var(--status-active);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  transition: var(--transition);
 }
 
 .status-text {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: var(--text-primary);
+  transition: var(--transition);
+}
+
+/* Dynamic State Indicators */
+.status-indicator.state-active .dot {
+  background-color: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+}
+
+.status-indicator.state-paused .dot {
+  background-color: #eab308;
+  box-shadow: 0 0 6px rgba(234, 179, 8, 0.7);
+}
+
+.status-indicator.state-off .dot {
+  background-color: #71717a;
+  box-shadow: none;
+}
+
+.status-indicator.state-music .dot {
+  background-color: #a855f7;
+  box-shadow: 0 0 6px rgba(168, 85, 247, 0.7);
+}
+
+/* Master Control Cards */
+.master-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: var(--transition);
+}
+
+.control-card:hover {
+  border-color: var(--border-focus);
+}
+
+.control-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-eyebrow {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.domain-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
+.switch-state-text {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   color: var(--text-secondary);
+  min-width: 24px;
+  text-align: right;
+  transition: var(--transition);
+}
+
+.switch-state-text.is-off {
+  color: var(--text-muted);
+}
+
+/* Power Button (Clean monochromatic square with rounded corners) */
+.power-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--transition);
+  padding: 0;
+}
+
+.power-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.power-btn:hover {
+  background-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.power-btn.active {
+  background-color: var(--accent-white);
+  color: var(--accent-dark);
+  border-color: var(--accent-white);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Monochromatic Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  border-radius: 9999px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-muted);
+  transition: var(--transition);
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--border-focus);
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+  background-color: var(--accent-white);
+}
+
+/* Speed Controls Container (Dimmable) */
+.speed-controls-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: var(--transition);
+}
+
+.speed-controls-container.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 /* Section */
@@ -294,55 +493,7 @@ body {
   border-color: var(--accent-white);
 }
 
-/* Minimal Monochromatic Toggle Switch */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  transition: var(--transition);
-  border-radius: 9999px;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--text-muted);
-  transition: var(--transition);
-  border-radius: 50%;
-}
-
-input:checked + .slider {
-  background-color: var(--border-focus);
-}
-
-input:checked + .slider:before {
-  transform: translateX(16px);
-  background-color: var(--accent-white);
-}
-
-/* Music Notice Card */
+/* Contextual Music Notice Card */
 .info-card {
   display: flex;
   align-items: flex-start;
