@@ -266,6 +266,11 @@
             name.includes('vevo') ||
             name.includes('records') ||
             name.includes('music') ||
+            name.includes('songs') ||
+            name.includes('sandalwood') ||
+            name.includes('lahari') ||
+            name.includes('anand audio') ||
+            name.includes('aditya music') ||
             name.includes('t-series') ||
             name.includes('zee music') ||
             name.includes('sony music') ||
@@ -376,9 +381,9 @@
     hookedElements.add(media);
     trackedMediaElements.add(media);
 
-    media.addEventListener('play', () => {
+    const notifyPlaying = () => {
       evaluateAndApplySpeed();
-      if (smartAutoPause && isRunnyActiveOnThisPage() && !media.paused) {
+      if (smartAutoPause && isRunnyActiveOnThisPage() && !media.paused && media.currentTime > 0) {
         try {
           chrome.runtime.sendMessage({
             type: MESSAGE_TYPES.MEDIA_STARTED_PLAYING,
@@ -386,7 +391,10 @@
           }).catch(() => {});
         } catch (_) {}
       }
-    }, { passive: true });
+    };
+
+    media.addEventListener('play', notifyPlaying, { passive: true });
+    media.addEventListener('playing', notifyPlaying, { passive: true });
     media.addEventListener('loadedmetadata', () => evaluateAndApplySpeed(), { passive: true });
     media.addEventListener('ratechange', () => {
       const target = getEffectiveSpeed();
@@ -555,18 +563,13 @@
           const wakeVideo = async () => {
             try {
               if (pipVideo.paused) {
-                // If it was paused during PiP exit, nudge currentTime marginally to trigger frame buffer draw
+                // If paused during PiP exit, nudge currentTime to wake decode pipeline
                 const t = pipVideo.currentTime;
                 pipVideo.currentTime = t > 0.05 ? t - 0.01 : 0.01;
                 pipVideo.currentTime = t;
               } else {
                 await pipVideo.play();
               }
-              // Force GPU layer composition reflow
-              pipVideo.style.display = 'none';
-              void pipVideo.offsetHeight; // force reflow
-              pipVideo.style.display = '';
-              pipVideo.style.transform = 'translateZ(0)';
             } catch (_) {}
           };
           setTimeout(wakeVideo, 40);
@@ -590,10 +593,6 @@
             video.currentTime = t > 0.05 ? t - 0.01 : 0.01;
             video.currentTime = t;
           }
-          video.style.display = 'none';
-          void video.offsetHeight;
-          video.style.display = '';
-          video.style.transform = 'translateZ(0)';
         } catch (_) {}
       };
       setTimeout(restoreVideo, 40);
@@ -713,15 +712,26 @@
         break;
       }
       case MESSAGE_TYPES.PAUSE_OTHER_MEDIA: {
-        // Only pause if this tab is NOT the active tab or user explicitly wants single media source
-        if (smartAutoPause && isRunnyActiveOnThisPage() && trackedMediaElements.size > 0) {
-          for (const media of trackedMediaElements) {
+        // When another media source begins playing, pause this tab and dismiss its floating PiP window
+        if (smartAutoPause && isRunnyActiveOnThisPage()) {
+          // 1. Immediately dismiss any floating Picture-in-Picture window
+          if (document.pictureInPictureElement) {
             try {
-              if (!media.paused && media.duration > 0 && !media.ended) {
-                media.pause();
-                showSpeedHUD(null, false, '⏸️ Paused (Another Media Playing)');
-              }
+              document.exitPictureInPicture();
             } catch (_) {}
+            autoPipEntered = false;
+          }
+
+          // 2. Pause all playing media elements in this tab
+          if (trackedMediaElements.size > 0) {
+            for (const media of trackedMediaElements) {
+              try {
+                if (!media.paused && media.duration > 0 && !media.ended) {
+                  media.pause();
+                  showSpeedHUD(null, false, '⏸️ Paused (Another Media Playing)');
+                }
+              } catch (_) {}
+            }
           }
         }
         sendResponse({ success: true });

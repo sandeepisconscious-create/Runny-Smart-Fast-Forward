@@ -5,7 +5,8 @@
   "description": "Smart fast-forward speed control across any media player with custom defaults and auto-normal speed for music.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"

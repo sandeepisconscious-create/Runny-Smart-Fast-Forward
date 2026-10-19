@@ -2,9 +2,9 @@
 
   <img src="icons/logo.png" alt="Runny Logo" width="128" />
 
-  # Runny — Smart Fast Forward
+  # Runny — Smart Media & Fast Forward
 
-  **The intelligent video accelerator that auto-fast-forwards your lectures, podcasts, and videos — but never ruins your music.**
+  **The intelligent media controller that auto-fast-forwards lectures, seamlessly manages multi-tab media & picture-in-picture, and never ruins your music.**
 
   <p align="center">
     <a href="https://github.com/sandeepisconscious-create/Runny-Smart-Fast-Forward/archive/refs/heads/main.zip">
@@ -22,42 +22,42 @@
 
 ---
 
-## ⚡ The Problem: Video Speed Is Broken
+## ⚡ The Problems with Modern Web Video
 
-We all watch content faster to save hours of time. But current solutions have two annoying problems:
+1. **Repetitive Speed Adjustment**: You watch educational content, tutorials, and interviews faster to save time, but have to manually adjust player speed on every single page.
+2. **Music Distortion**: Generic speed tools blindly accelerate everything. When a music video or track plays, it sounds like a chipmunk and ruins the listening experience.
+3. **Tab Audio Clashing**: You're watching a video on YouTube or Hotstar, open another media tab, and both media sources play audio at the same time on top of each other.
+4. **Clunky Picture-in-Picture**: Switching tabs either interrupts playback or leaves disconnected, oversized floating windows lingering when new media starts.
 
-1. **You have to manually adjust speed every single time.** You open a tutorial, an interview, or a lecture, click through settings, and toggle the speed. Close the tab, open another, repeat.
-2. **Music gets ruined.** If you keep a generic speed controller on or change global speed, you suddenly click a song, an album, or a music video, and it plays at chipmunk speed, ruining the track.
+---
 
 ## 💡 The Solution: Meet Runny
 
-**Runny** is a lightweight, zero-bloat Chrome extension that sets your preferred playback speed across **every media player on the web**—and automatically drops down to standard 1.0× the second music starts playing.
+**Runny** is a lightweight, zero-bloat Chrome extension that acts as your intelligent media companion across **every video and audio player on the web**:
 
-- **Set it once, forget it**: Choose your sweet spot (1.25×, 1.5×, 1.75×, or 2.0×) and make it your default. Videos will automatically start at that speed.
-- **Smart Music Protection**: Runny analyzes metadata, tags, audio channels, and streaming platforms (YouTube Music, Spotify, SoundCloud, Apple Music, and YouTube music categories). When music plays, Runny preserves the intended listening experience at 1.0×.
-- **Zero Pitch Distortion**: Enforces native pitch-preservation algorithms so voices sound natural, crystal-clear, and intelligible—no unnatural pitch shifts or robotic artifacts.
-- **Works Everywhere**: Not just YouTube. Works across Vimeo, Netflix, Twitter/X, Reddit, Coursera, Loom, embedded iframes, and custom HTML5 video players.
+- **Set It Once, Accelerated Everywhere**: Choose your preferred speed (1.25×, 1.5×, 2.0×, up to 3.0×) and save it as your default. Videos automatically launch at your speed.
+- **Deep Smart Music Protection**: Runny analyzes metadata, channel artist badges, record labels, and title patterns. When a song plays (across Spotify, YouTube, SoundCloud, or OTT), Runny automatically preserves it at natural 1.0×.
+- **Smart Multi-Media Coordinator**: When multiple tabs play media (e.g. YouTube & JioHotstar), Runny automatically pauses previous tabs and dismisses existing floating PiP windows so two audio sources never fight.
+- **DRM-Unblocked Picture-in-Picture**: Bypasses `disablePictureInPicture` locks on OTT streaming platforms (JioHotstar, Prime Video, Netflix) and pops videos in/out of PiP seamlessly.
+- **Natural Pitch Preservation**: Enforces native pitch-preservation so voices stay crisp, intelligible, and authentic without robotic distortion.
 
 ---
 
 ## ✨ Features
 
-- **Global Fast Forward Toggle**: Master switch to turn the extension ON or completely OFF across your entire browser with a single click.
-- **Current Website Pause**: Easily pause or whitelist specific sites (e.g. `youtube.com`, `coursera.org`) while keeping fast-forward active everywhere else.
-- **Auto Picture-in-Picture & DRM Bypass**: Seamlessly pops active videos into a floating Picture-in-Picture window when switching away to another tab (or pressing **`Alt + P`** / **`Option + P`**). Bypasses `disablePictureInPicture` locks placed by sites like Amazon Prime Video, Hotstar, Netflix, and custom streaming players.
+- **Global Fast Forward Toggle**: Master switch to turn the extension ON or completely OFF browser-wide with a single click.
+- **Current Website Pause / Whitelist**: Easily pause Runny on specific sites (e.g. `youtube.com`, `hotstar.com`) while keeping it active everywhere else.
+- **Smart Media Coordinator**: Prevents clashing audio by automatically pausing other background video tabs when a new media source begins playing.
+- **Auto Picture-in-Picture (PiP)**:
+  - Automatically pops video into PiP on tab switch and seamlessly restores the player back into the page when returning.
+  - Automatically closes and dismisses floating PiP windows when a new media source is played.
 - **Global Keyboard Shortcuts**:
   - `Alt + Shift + Right` (or `Option + Shift + Right` on Mac): Speed up (+0.25x)
   - `Alt + Shift + Left` (or `Option + Shift + Left` on Mac): Slow down (-0.25x)
   - `Alt + Shift + Down` (or `Option + Shift + Down` on Mac): Reset to 1.0x / default
-  - `Alt + P` (or `Option + P` on Mac): Toggle Picture-in-Picture instantly from any tab or app
-- **Visual Default Indicator**: A minimalist pip highlights your current default preset at a glance.
-- **Music Protection Toggle**: Turn auto-music protection on or off with a switch.
-- **Universal Player Compatibility**: Supports Shadow DOM players, embedded video iframes, and modern single-page apps (SPAs).
-- **Auto-PiP on Tab Switch**:
-  - **Instant Keyboard Shortcut**: Press **`Alt + P`** (or **`Option + P`** on Mac) at any time to pop active videos in/out of PiP.
-  - **Seamless Native Tab-Switch Auto-PiP**: Enable `chrome://flags/#auto-picture-in-picture-for-video-playback` in Chrome to let the browser automatically pop active videos into PiP whenever switching tabs without security blocks.
-- **Monochromatic Minimal Dark UI**: Built with a sleek, distraction-free aesthetic that looks right at home in modern browsers.
-- **Privacy-First & 100% Free**: No tracking, no external server calls, no telemetry. Everything runs locally in your browser.
+  - `Alt + P` (or `Option + P` on Mac): Instant Picture-in-Picture toggle from any tab or app
+- **Monochromatic Minimal Dark UI**: Sleek, distraction-free interface (`#09090b` palette) crafted for modern dark mode aesthetics.
+- **Privacy-First & 100% Free**: Zero tracking, zero analytics, zero external network requests. All logic executes locally in your browser.
 
 ---
 
