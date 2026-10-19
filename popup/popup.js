@@ -3,15 +3,15 @@
  * Manages speed selection, fine-tuning, settings persistence, and tab synchronization.
  */
 
-import {
-  STORAGE_KEYS,
-  MESSAGE_TYPES,
-  SPEED_LIMITS,
-  clampSpeed,
-  formatSpeedDisplay
-} from '../shared/constants.js';
-
 document.addEventListener('DOMContentLoaded', () => {
+  const {
+    STORAGE_KEYS,
+    MESSAGE_TYPES,
+    SPEED_LIMITS,
+    clampSpeed,
+    formatSpeedDisplay
+  } = window.RunnyShared;
+
   // DOM Elements
   const speedButtons = document.querySelectorAll('.speed-btn');
   const speedSlider = document.getElementById('speedSlider');

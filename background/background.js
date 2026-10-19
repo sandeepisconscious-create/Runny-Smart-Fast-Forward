@@ -3,7 +3,10 @@
  * Handles installation defaults, cross-tab syncing, and global keyboard shortcuts.
  */
 
-import { STORAGE_KEYS, SPEED_LIMITS, MESSAGE_TYPES, clampSpeed } from '../shared/constants.js';
+// Use importScripts for standard, reliable ServiceWorker compatibility
+importScripts('../shared/constants.js');
+
+const { STORAGE_KEYS, SPEED_LIMITS, MESSAGE_TYPES, clampSpeed } = self.RunnyShared;
 
 // Initialize defaults on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -59,9 +62,7 @@ chrome.commands.onCommand.addListener((command) => {
           type: MESSAGE_TYPES.SET_SPEED,
           speed: speed,
           showBadge: true
-        }).catch(() => {
-          // Tab might be an internal page or not have content script injected yet
-        });
+        }).catch(() => {});
       }
     });
   });
