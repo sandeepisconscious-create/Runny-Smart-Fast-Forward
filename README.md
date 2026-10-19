@@ -43,7 +43,14 @@ We all watch content faster to save hours of time. But current solutions have tw
 ## ✨ Features
 
 - **YouTube-Standard Speeds**: Seamless stepping between **1.0×**, **1.25×**, **1.5×**, **1.75×**, and **2.0×**.
-- **One-Click Default**: Select any speed and click **Save Default** to keep it persistent across all your tabs and sessions.
+- **Fine-Tune Custom Slider & Steppers**: Need **2.25×**, **2.5×**, or **0.85×**? Use the slider or `+` / `−` steppers to dial in custom speeds.
+- **On-Screen Display (OSD HUD)**: A subtle, translucent badge displays on-screen whenever speed changes or music is detected so you never have to leave full-screen.
+- **Global Keyboard Shortcuts**:
+  - `Alt + Shift + Right` (or `Option + Shift + Right` on Mac): Speed up (+0.25x)
+  - `Alt + Shift + Left` (or `Option + Shift + Left` on Mac): Slow down (-0.25x)
+  - `Alt + Shift + Down` (or `Option + Shift + Down` on Mac): Reset to 1.0x / default
+- **Visual Default Indicator**: A minimalist pip highlights your current default preset at a glance.
+- **Music Protection Toggle**: Turn auto-music protection on or off with a switch.
 - **Universal Player Compatibility**: Supports Shadow DOM players, embedded video iframes, and modern single-page apps (SPAs).
 - **Monochromatic Minimal Dark UI**: Built with a sleek, distraction-free aesthetic that looks right at home in modern browsers.
 - **Privacy-First & 100% Free**: No tracking, no external server calls, no telemetry. Everything runs locally in your browser.

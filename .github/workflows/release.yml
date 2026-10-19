@@ -1,0 +1,26 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Package Extension
+        run: |
+          zip -r runny-${{ github.ref_name }}.zip . -x ".git/*" -x ".github/*"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: runny-${{ github.ref_name }}.zip
+          generate_release_notes: true

@@ -24,28 +24,62 @@
     <section class="section">
       <div class="section-label">Playback Speed</div>
       <div class="speed-grid" id="speedButtons">
-        <button class="speed-btn" data-speed="1">1.0×</button>
-        <button class="speed-btn" data-speed="1.25">1.25×</button>
-        <button class="speed-btn" data-speed="1.5">1.5×</button>
-        <button class="speed-btn" data-speed="1.75">1.75×</button>
-        <button class="speed-btn" data-speed="2">2.0×</button>
+        <button class="speed-btn" data-speed="1">
+          <span class="btn-text">1.0×</span>
+          <span class="default-pip" title="Default speed"></span>
+        </button>
+        <button class="speed-btn" data-speed="1.25">
+          <span class="btn-text">1.25×</span>
+          <span class="default-pip" title="Default speed"></span>
+        </button>
+        <button class="speed-btn" data-speed="1.5">
+          <span class="btn-text">1.5×</span>
+          <span class="default-pip" title="Default speed"></span>
+        </button>
+        <button class="speed-btn" data-speed="1.75">
+          <span class="btn-text">1.75×</span>
+          <span class="default-pip" title="Default speed"></span>
+        </button>
+        <button class="speed-btn" data-speed="2">
+          <span class="btn-text">2.0×</span>
+          <span class="default-pip" title="Default speed"></span>
+        </button>
+      </div>
+
+      <!-- Fine-tune Custom Speed Slider & Steppers -->
+      <div class="custom-speed-row">
+        <button class="step-btn" id="stepDownBtn" title="Decrease speed by 0.1x">−</button>
+        <input type="range" class="speed-slider" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.25">
+        <button class="step-btn" id="stepUpBtn" title="Increase speed by 0.1x">+</button>
+        <span class="custom-speed-val" id="customSpeedVal">1.25×</span>
       </div>
     </section>
 
-    <!-- Default Speed Toggle -->
+    <!-- Default Speed & Music Bypass Controls -->
     <section class="section action-section">
       <div class="row">
         <div class="label-group">
-          <span class="primary-text">Set as Default Speed</span>
+          <span class="primary-text">Default Speed</span>
           <span class="sub-text" id="defaultSpeedHint">Current default: 1.25×</span>
         </div>
         <button class="action-btn" id="makeDefaultBtn" title="Set selected speed as default">
           Save Default
         </button>
       </div>
+      
+      <div class="row divider">
+        <div class="label-group">
+          <span class="primary-text">Auto Music Protection</span>
+          <span class="sub-text">Reset to 1.0× on songs</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="musicBypassToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
     </section>
 
-    <!-- Music Bypass Status Box -->
+    <!-- Music / Status Card -->
     <div class="info-card" id="musicNotice">
       <div class="info-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -59,6 +93,11 @@
         <div class="info-desc" id="infoDesc">Speed resets to 1.0× automatically when music is playing.</div>
       </div>
     </div>
+
+    <!-- Shortcut Hint Footer -->
+    <footer class="footer-shortcuts">
+      <span>Shortcuts: <b>⌥+⇧+→</b> (+0.25) &bull; <b>⌥+⇧+←</b> (-0.25)</span>
+    </footer>
   </div>
 
   <script src="popup.js"></script>

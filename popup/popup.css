@@ -38,7 +38,7 @@ body {
   padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 15px;
 }
 
 /* Header */
@@ -113,7 +113,7 @@ body {
 .speed-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  gap: 5px;
   background-color: var(--bg-secondary);
   padding: 4px;
   border-radius: var(--radius-md);
@@ -127,10 +127,16 @@ body {
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  padding: 9px 0;
+  padding: 8px 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  gap: 2px;
 }
 
 .speed-btn:hover {
@@ -145,12 +151,95 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
+.speed-btn .default-pip {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: transparent;
+  transition: var(--transition);
+}
+
+.speed-btn.is-default .default-pip {
+  background-color: #a1a1aa;
+}
+
+.speed-btn.active.is-default .default-pip {
+  background-color: #000000;
+}
+
+/* Custom Speed Slider Row */
+.custom-speed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+}
+
+.step-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition);
+}
+
+.step-btn:hover {
+  background-color: var(--border-focus);
+}
+
+.speed-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-focus);
+  outline: none;
+}
+
+.speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-white);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.speed-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.custom-speed-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Action Section */
 .action-section {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .row {
@@ -160,10 +249,15 @@ body {
   gap: 10px;
 }
 
+.divider {
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+
 .label-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .primary-text {
@@ -200,6 +294,54 @@ body {
   border-color: var(--accent-white);
 }
 
+/* Minimal Monochromatic Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  border-radius: 9999px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-muted);
+  transition: var(--transition);
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--border-focus);
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+  background-color: var(--accent-white);
+}
+
 /* Music Notice Card */
 .info-card {
   display: flex;
@@ -208,7 +350,7 @@ body {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 11px 12px;
   transition: var(--transition);
 }
 
@@ -218,8 +360,8 @@ body {
 }
 
 .info-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   stroke: var(--text-secondary);
   margin-top: 1px;
 }
@@ -240,4 +382,16 @@ body {
   font-size: 10px;
   line-height: 1.35;
   color: var(--text-muted);
+}
+
+/* Footer Shortcuts */
+.footer-shortcuts {
+  text-align: center;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+
+.footer-shortcuts b {
+  color: var(--text-secondary);
 }

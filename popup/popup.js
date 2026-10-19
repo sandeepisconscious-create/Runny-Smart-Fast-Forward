@@ -1,7 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
   const speedButtons = document.querySelectorAll('.speed-btn');
+  const speedSlider = document.getElementById('speedSlider');
+  const customSpeedVal = document.getElementById('customSpeedVal');
+  const stepUpBtn = document.getElementById('stepUpBtn');
+  const stepDownBtn = document.getElementById('stepDownBtn');
   const makeDefaultBtn = document.getElementById('makeDefaultBtn');
   const defaultSpeedHint = document.getElementById('defaultSpeedHint');
+  const musicBypassToggle = document.getElementById('musicBypassToggle');
   const statusLabel = document.getElementById('statusLabel');
   const statusBadge = document.getElementById('statusBadge');
   const musicNotice = document.getElementById('musicNotice');
@@ -10,9 +15,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentSpeed = 1.25;
   let defaultSpeed = 1.25;
+  let smartMusicBypass = true;
 
-  // Update UI active buttons
-  function updateSpeedButtonsUI(speed) {
+  // Format number cleanly
+  function formatSpeed(val) {
+    return parseFloat(val).toFixed(val % 1 === 0 ? 1 : 2).replace(/\.?0+$/, '') + '×';
+  }
+
+  // Update UI active buttons & default pip
+  function updateSpeedUI(speed) {
     speedButtons.forEach((btn) => {
       const btnSpeed = parseFloat(btn.dataset.speed);
       if (Math.abs(btnSpeed - speed) < 0.01) {
@@ -20,7 +31,16 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         btn.classList.remove('active');
       }
+
+      if (Math.abs(btnSpeed - defaultSpeed) < 0.01) {
+        btn.classList.add('is-default');
+      } else {
+        btn.classList.remove('is-default');
+      }
     });
+
+    speedSlider.value = speed;
+    customSpeedVal.textContent = `${speed}×`;
   }
 
   function updateDefaultHint(speed) {
@@ -28,14 +48,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load stored settings
-  chrome.storage.sync.get(['currentSpeed', 'defaultSpeed'], (data) => {
+  chrome.storage.sync.get(['currentSpeed', 'defaultSpeed', 'smartMusicBypass'], (data) => {
     if (data.currentSpeed !== undefined) {
       currentSpeed = parseFloat(data.currentSpeed);
     }
     if (data.defaultSpeed !== undefined) {
       defaultSpeed = parseFloat(data.defaultSpeed);
     }
-    updateSpeedButtonsUI(currentSpeed);
+    if (data.smartMusicBypass !== undefined) {
+      smartMusicBypass = data.smartMusicBypass;
+      musicBypassToggle.checked = smartMusicBypass;
+    }
+    updateSpeedUI(currentSpeed);
     updateDefaultHint(defaultSpeed);
   });
 
@@ -57,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function handleStatusResponse(response) {
-    if (response.isMusic) {
+    if (response.isMusic && smartMusicBypass) {
       statusLabel.textContent = 'Music (1.0×)';
       musicNotice.classList.add('music-active');
       infoTitle.textContent = 'Music Playing';
@@ -66,30 +90,74 @@ document.addEventListener('DOMContentLoaded', () => {
       statusLabel.textContent = `${response.effectiveSpeed || currentSpeed}× Active`;
       musicNotice.classList.remove('music-active');
       infoTitle.textContent = 'Smart Music Protection';
-      infoDesc.textContent = 'Speed resets to 1.0× automatically when music is playing.';
+      infoDesc.textContent = smartMusicBypass 
+        ? 'Speed resets to 1.0× automatically when music is playing.' 
+        : 'Music protection is currently disabled.';
     }
   }
 
-  // Handle clicking speed buttons
+  function applySpeed(newSpeed, showBadge = true) {
+    currentSpeed = Math.round(newSpeed * 100) / 100;
+    updateSpeedUI(currentSpeed);
+
+    chrome.storage.sync.set({ currentSpeed: currentSpeed });
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0 && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: 'SET_SPEED',
+          speed: currentSpeed,
+          showBadge: showBadge
+        }, (res) => {
+          if (res && res.effectiveSpeed) {
+            statusLabel.textContent = `${res.effectiveSpeed}× Active`;
+          }
+        });
+      }
+    });
+  }
+
+  // Handle preset speed button clicks
   speedButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const selected = parseFloat(btn.dataset.speed);
-      currentSpeed = selected;
-      updateSpeedButtonsUI(selected);
+      applySpeed(parseFloat(btn.dataset.speed));
+    });
+  });
 
-      // Save to storage
-      chrome.storage.sync.set({ currentSpeed: selected });
+  // Handle fine-tune slider
+  speedSlider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    customSpeedVal.textContent = `${val}×`;
+  });
 
-      // Notify active tab
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs.length > 0 && tabs[0].id) {
-          chrome.tabs.sendMessage(tabs[0].id, { type: 'SET_SPEED', speed: selected }, (res) => {
-            if (res && res.effectiveSpeed) {
-              statusLabel.textContent = `${res.effectiveSpeed}× Active`;
-            }
-          });
-        }
-      });
+  speedSlider.addEventListener('change', (e) => {
+    applySpeed(parseFloat(e.target.value));
+  });
+
+  // Handle +/- steppers (0.1x steps)
+  stepUpBtn.addEventListener('click', () => {
+    applySpeed(Math.min(3.0, currentSpeed + 0.1));
+  });
+
+  stepDownBtn.addEventListener('click', () => {
+    applySpeed(Math.max(0.5, currentSpeed - 0.1));
+  });
+
+  // Handle Music Bypass Toggle
+  musicBypassToggle.addEventListener('change', (e) => {
+    smartMusicBypass = e.target.checked;
+    chrome.storage.sync.set({ smartMusicBypass: smartMusicBypass });
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0 && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: 'SET_MUSIC_BYPASS',
+          enabled: smartMusicBypass
+        }, () => {
+          // Re-fetch status
+          chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_RUNNY_STATUS' }, handleStatusResponse);
+        });
+      }
     });
   });
 
@@ -98,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     defaultSpeed = currentSpeed;
     chrome.storage.sync.set({ defaultSpeed: defaultSpeed }, () => {
       updateDefaultHint(defaultSpeed);
+      updateSpeedUI(currentSpeed);
       makeDefaultBtn.classList.add('saved');
       makeDefaultBtn.textContent = 'Saved!';
       setTimeout(() => {
