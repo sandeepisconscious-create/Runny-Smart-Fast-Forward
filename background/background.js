@@ -33,6 +33,9 @@ chrome.runtime.onInstalled.addListener(() => {
     if (!Array.isArray(data[STORAGE_KEYS.DISABLED_DOMAINS])) {
       defaults[STORAGE_KEYS.DISABLED_DOMAINS] = [];
     }
+    if (data[STORAGE_KEYS.AUTO_PIP_ENABLED] === undefined) {
+      defaults[STORAGE_KEYS.AUTO_PIP_ENABLED] = true;
+    }
 
     if (Object.keys(defaults).length > 0) {
       chrome.storage.sync.set(defaults);

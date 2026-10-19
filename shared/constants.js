@@ -9,7 +9,8 @@
     DEFAULT_SPEED: 'defaultSpeed',
     SMART_MUSIC_BYPASS: 'smartMusicBypass',
     IS_GLOBALLY_ENABLED: 'isGloballyEnabled',
-    DISABLED_DOMAINS: 'disabledDomains'
+    DISABLED_DOMAINS: 'disabledDomains',
+    AUTO_PIP_ENABLED: 'autoPipEnabled'
   };
 
   const MESSAGE_TYPES = {
@@ -18,6 +19,7 @@
     SET_MUSIC_BYPASS: 'SET_MUSIC_BYPASS',
     SET_GLOBAL_ACTIVE: 'SET_GLOBAL_ACTIVE',
     SET_DOMAIN_ACTIVE: 'SET_DOMAIN_ACTIVE',
+    SET_AUTO_PIP: 'SET_AUTO_PIP',
     STATUS_UPDATE: 'RUNNY_STATUS_UPDATE'
   };
 

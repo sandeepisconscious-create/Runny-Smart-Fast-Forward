@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const makeDefaultBtn = document.getElementById('makeDefaultBtn');
   const defaultSpeedHint = document.getElementById('defaultSpeedHint');
   const musicBypassToggle = document.getElementById('musicBypassToggle');
+  const autoPipToggle = document.getElementById('autoPipToggle');
   const musicNotice = document.getElementById('musicNotice');
 
   // State
@@ -42,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let smartMusicBypass = true;
   let isGloballyEnabled = true;
   let disabledDomains = [];
+  let autoPipEnabled = true;
   let currentTabDomain = '';
   let activeTabMediaCount = 0;
   let activeTabIsMusic = false;
@@ -219,7 +221,8 @@ document.addEventListener('DOMContentLoaded', () => {
     STORAGE_KEYS.DEFAULT_SPEED,
     STORAGE_KEYS.SMART_MUSIC_BYPASS,
     STORAGE_KEYS.IS_GLOBALLY_ENABLED,
-    STORAGE_KEYS.DISABLED_DOMAINS
+    STORAGE_KEYS.DISABLED_DOMAINS,
+    STORAGE_KEYS.AUTO_PIP_ENABLED
   ], (data) => {
     if (data[STORAGE_KEYS.CURRENT_SPEED] !== undefined) {
       currentSpeed = parseFloat(data[STORAGE_KEYS.CURRENT_SPEED]);
@@ -236,6 +239,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (Array.isArray(data[STORAGE_KEYS.DISABLED_DOMAINS])) {
       disabledDomains = data[STORAGE_KEYS.DISABLED_DOMAINS].map(d => d.toLowerCase());
+    }
+    if (data[STORAGE_KEYS.AUTO_PIP_ENABLED] !== undefined) {
+      autoPipEnabled = Boolean(data[STORAGE_KEYS.AUTO_PIP_ENABLED]);
+      if (autoPipToggle) autoPipToggle.checked = autoPipEnabled;
     }
 
     updateSpeedUI(currentSpeed);
@@ -350,7 +357,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 9. Save Default Button Event
+  // 9. Auto Picture-in-Picture Toggle Event
+  if (autoPipToggle) {
+    autoPipToggle.addEventListener('change', (e) => {
+      autoPipEnabled = e.target.checked;
+      chrome.storage.sync.set({ [STORAGE_KEYS.AUTO_PIP_ENABLED]: autoPipEnabled });
+
+      sendToActiveTab({
+        type: MESSAGE_TYPES.SET_AUTO_PIP,
+        enabled: autoPipEnabled
+      });
+    });
+  }
+
+  // 10. Save Default Button Event
   if (makeDefaultBtn) {
     makeDefaultBtn.addEventListener('click', () => {
       defaultSpeed = currentSpeed;

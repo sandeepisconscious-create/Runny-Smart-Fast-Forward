@@ -19,7 +19,8 @@
     DEFAULT_SPEED: 'defaultSpeed',
     SMART_MUSIC_BYPASS: 'smartMusicBypass',
     IS_GLOBALLY_ENABLED: 'isGloballyEnabled',
-    DISABLED_DOMAINS: 'disabledDomains'
+    DISABLED_DOMAINS: 'disabledDomains',
+    AUTO_PIP_ENABLED: 'autoPipEnabled'
   };
 
   const MESSAGE_TYPES = {
@@ -28,6 +29,7 @@
     SET_MUSIC_BYPASS: 'SET_MUSIC_BYPASS',
     SET_GLOBAL_ACTIVE: 'SET_GLOBAL_ACTIVE',
     SET_DOMAIN_ACTIVE: 'SET_DOMAIN_ACTIVE',
+    SET_AUTO_PIP: 'SET_AUTO_PIP',
     STATUS_UPDATE: 'RUNNY_STATUS_UPDATE'
   };
 
@@ -59,10 +61,12 @@
   let smartMusicBypass = true;
   let isGloballyEnabled = true;
   let disabledDomains = [];
+  let autoPipEnabled = true;
   let isCurrentMediaMusic = false;
   let lastMusicCheckTime = 0;
   let cachedMusicResult = false;
   let hudTimeout = null;
+  let autoPipEntered = false;
 
   // Media Registry to avoid re-querying and duplicate listeners
   const trackedMediaElements = new Set();
@@ -115,6 +119,9 @@
     if (Array.isArray(data[STORAGE_KEYS.DISABLED_DOMAINS])) {
       disabledDomains = data[STORAGE_KEYS.DISABLED_DOMAINS].map(d => d.toLowerCase());
     }
+    if (data[STORAGE_KEYS.AUTO_PIP_ENABLED] !== undefined) {
+      autoPipEnabled = Boolean(data[STORAGE_KEYS.AUTO_PIP_ENABLED]);
+    }
     evaluateAndApplySpeed();
   });
 
@@ -135,6 +142,9 @@
     }
     if (changes[STORAGE_KEYS.DISABLED_DOMAINS]) {
       disabledDomains = (changes[STORAGE_KEYS.DISABLED_DOMAINS].newValue || []).map(d => d.toLowerCase());
+    }
+    if (changes[STORAGE_KEYS.AUTO_PIP_ENABLED]) {
+      autoPipEnabled = Boolean(changes[STORAGE_KEYS.AUTO_PIP_ENABLED].newValue);
     }
     evaluateAndApplySpeed();
   });
@@ -367,6 +377,74 @@
     } catch (_) {}
   }
 
+  // Find the primary active video on the page
+  function getActivePlayingVideo() {
+    for (const media of trackedMediaElements) {
+      if (media.tagName === 'VIDEO' && !media.paused && media.duration > 0 && !media.ended) {
+        return media;
+      }
+    }
+    // Fallback: check DOM for any video playing
+    const allVideos = document.querySelectorAll('video');
+    for (const v of allVideos) {
+      if (!v.paused && v.duration > 0 && !v.ended) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  // Handle Tab Switch: Auto Picture-in-Picture
+  async function handleVisibilityChange() {
+    if (!autoPipEnabled || !isRunnyActiveOnThisPage()) {
+      return;
+    }
+
+    // Do not pop out picture-in-picture if it's music
+    if (isCurrentMediaMusic && smartMusicBypass) {
+      return;
+    }
+
+    if (document.hidden) {
+      // Switched away to another tab
+      const video = getActivePlayingVideo();
+      if (video && document.pictureInPictureEnabled && !document.pictureInPictureElement) {
+        try {
+          await video.requestPictureInPicture();
+          autoPipEntered = true;
+        } catch (err) {
+          // Some sites require direct user activation if not allowed by Chrome flags
+        }
+      }
+    } else {
+      // Switched back to this tab
+      if (autoPipEntered && document.pictureInPictureElement) {
+        try {
+          await document.exitPictureInPicture();
+          autoPipEntered = false;
+        } catch (_) {}
+      }
+    }
+  }
+
+  document.addEventListener('visibilitychange', handleVisibilityChange, { passive: true });
+
+  // Chrome MediaSession native auto-pip hook (if supported)
+  if ('mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession) {
+    try {
+      navigator.mediaSession.setActionHandler('enterpictureinpicture', async () => {
+        if (!autoPipEnabled || !isRunnyActiveOnThisPage()) return;
+        const video = getActivePlayingVideo();
+        if (video && !document.pictureInPictureElement) {
+          try {
+            await video.requestPictureInPicture();
+            autoPipEntered = true;
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
+  }
+
   // Targeted MutationObserver
   const observer = new MutationObserver((mutations) => {
     for (let i = 0; i < mutations.length; i++) {
@@ -403,6 +481,7 @@
           smartMusicBypass: smartMusicBypass,
           isGloballyEnabled: isGloballyEnabled,
           isDomainDisabled: isDomainDisabled(),
+          autoPipEnabled: autoPipEnabled,
           currentDomain: getCurrentDomain(),
           mediaCount: trackedMediaElements.size
         });
@@ -423,6 +502,14 @@
         sendResponse({
           success: true,
           smartMusicBypass: smartMusicBypass
+        });
+        break;
+      }
+      case MESSAGE_TYPES.SET_AUTO_PIP: {
+        autoPipEnabled = Boolean(request.enabled);
+        sendResponse({
+          success: true,
+          autoPipEnabled: autoPipEnabled
         });
         break;
       }
