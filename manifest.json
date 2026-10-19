@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Runny - Smart Fast Forward",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Smart fast-forward speed control across any media player with custom defaults and auto-normal speed for music.",
   "permissions": [
     "storage",
