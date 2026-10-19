@@ -384,14 +384,55 @@
         return media;
       }
     }
-    // Fallback: check DOM for any video playing
+    // Fallback: check DOM for any video playing or ready
     const allVideos = document.querySelectorAll('video');
     for (const v of allVideos) {
       if (!v.paused && v.duration > 0 && !v.ended) {
         return v;
       }
     }
-    return null;
+    return allVideos[0] || null;
+  }
+
+  // Bypass DRM / streaming site disablePictureInPicture restrictions (Prime Video, Hotstar, etc.)
+  function unlockVideoPiP(video) {
+    if (!video) return;
+    try {
+      if (video.disablePictureInPicture) {
+        video.disablePictureInPicture = false;
+      }
+      if (video.hasAttribute('disablepictureinpicture')) {
+        video.removeAttribute('disablepictureinpicture');
+      }
+    } catch (_) {}
+  }
+
+  // Direct toggle function (invoked via Alt+P shortcut or user click)
+  async function togglePiP() {
+    if (document.pictureInPictureElement) {
+      try {
+        await document.exitPictureInPicture();
+        showSpeedHUD(null, false, '🔲 Exited Picture-in-Picture');
+      } catch (_) {}
+      return;
+    }
+
+    const video = getActivePlayingVideo();
+    if (!video) {
+      showSpeedHUD(null, false, '⚠️ No video found to pop out');
+      return;
+    }
+
+    unlockVideoPiP(video);
+
+    try {
+      await video.requestPictureInPicture();
+      showSpeedHUD(null, false, '🔲 Picture-in-Picture Active');
+      autoPipEntered = true;
+    } catch (err) {
+      console.warn('[Runny] PiP request failed:', err);
+      showSpeedHUD(null, false, '⚠️ PiP blocked by site or DRM');
+    }
   }
 
   // Handle Tab Switch: Auto Picture-in-Picture
@@ -409,11 +450,12 @@
       // Switched away to another tab
       const video = getActivePlayingVideo();
       if (video && document.pictureInPictureEnabled && !document.pictureInPictureElement) {
+        unlockVideoPiP(video);
         try {
           await video.requestPictureInPicture();
           autoPipEntered = true;
         } catch (err) {
-          // Some sites require direct user activation if not allowed by Chrome flags
+          // Handled gracefully: browser transient user activation policy
         }
       }
     } else {
@@ -429,21 +471,26 @@
 
   document.addEventListener('visibilitychange', handleVisibilityChange, { passive: true });
 
-  // Chrome MediaSession native auto-pip hook (if supported)
-  if ('mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession) {
-    try {
-      navigator.mediaSession.setActionHandler('enterpictureinpicture', async () => {
-        if (!autoPipEnabled || !isRunnyActiveOnThisPage()) return;
-        const video = getActivePlayingVideo();
-        if (video && !document.pictureInPictureElement) {
-          try {
-            await video.requestPictureInPicture();
-            autoPipEntered = true;
-          } catch (_) {}
+  // Chrome MediaSession native auto-pip hook (injected into main page to register with browser subsystem)
+  try {
+    const script = document.createElement('script');
+    script.textContent = `
+      try {
+        if ('mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession) {
+          navigator.mediaSession.setActionHandler('enterpictureinpicture', async () => {
+            const v = document.querySelector('video');
+            if (v && !document.pictureInPictureElement) {
+              if (v.disablePictureInPicture) v.disablePictureInPicture = false;
+              v.removeAttribute('disablepictureinpicture');
+              await v.requestPictureInPicture();
+            }
+          });
         }
-      });
-    } catch (_) {}
-  }
+      } catch (_) {}
+    `;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  } catch (_) {}
 
   // Targeted MutationObserver
   const observer = new MutationObserver((mutations) => {
@@ -510,6 +557,13 @@
         sendResponse({
           success: true,
           autoPipEnabled: autoPipEnabled
+        });
+        break;
+      }
+      case MESSAGE_TYPES.TOGGLE_PIP: {
+        togglePiP();
+        sendResponse({
+          success: true
         });
         break;
       }

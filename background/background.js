@@ -68,6 +68,16 @@ chrome.commands.onCommand.addListener((command) => {
       case 'reset-speed':
         speed = (speed === SPEED_LIMITS.NORMAL) ? parseFloat(fallbackSpeed) : SPEED_LIMITS.NORMAL;
         break;
+      case 'toggle-pip':
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTab = tabs[0];
+          if (activeTab?.id) {
+            chrome.tabs.sendMessage(activeTab.id, {
+              type: MESSAGE_TYPES.TOGGLE_PIP
+            }).catch(() => {});
+          }
+        });
+        return;
       default:
         return;
     }

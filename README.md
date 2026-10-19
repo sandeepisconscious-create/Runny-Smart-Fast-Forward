@@ -44,15 +44,12 @@ We all watch content faster to save hours of time. But current solutions have tw
 
 - **Global Fast Forward Toggle**: Master switch to turn the extension ON or completely OFF across your entire browser with a single click.
 - **Current Website Pause**: Easily pause or whitelist specific sites (e.g. `youtube.com`, `coursera.org`) while keeping fast-forward active everywhere else.
-- **Auto Picture-in-Picture**: Seamlessly pops active videos into a floating Picture-in-Picture window when switching away to another tab (e.g., ChatGPT, docs) and snaps back when returning. Includes a dedicated on/off toggle.
-- **Dynamic Status Indicators**: Header indicator clearly displays whether Runny is **ACTIVE** (green dot), **PAUSED** on the current website (yellow dot), or **DISABLED** globally.
-- **YouTube-Inspired Speeds**: Quick preset buttons for **1.0×**, **1.25×**, **1.5×**, **2.0×**, and **3.0×**.
-- **Fine-Tune Custom Slider & Steppers**: Need **2.25×**, **2.5×**, or **0.85×**? Use the slider or `+` / `−` steppers to dial in custom speeds.
-- **On-Screen Display (OSD HUD)**: A subtle, translucent badge displays on-screen whenever speed changes or music is detected so you never have to leave full-screen.
+- **Auto Picture-in-Picture & DRM Bypass**: Seamlessly pops active videos into a floating Picture-in-Picture window when switching away to another tab (or pressing **`Alt + P`** / **`Option + P`**). Bypasses `disablePictureInPicture` locks placed by sites like Amazon Prime Video, Hotstar, Netflix, and custom streaming players.
 - **Global Keyboard Shortcuts**:
   - `Alt + Shift + Right` (or `Option + Shift + Right` on Mac): Speed up (+0.25x)
   - `Alt + Shift + Left` (or `Option + Shift + Left` on Mac): Slow down (-0.25x)
   - `Alt + Shift + Down` (or `Option + Shift + Down` on Mac): Reset to 1.0x / default
+  - `Alt + P` (or `Option + P` on Mac): Toggle Picture-in-Picture instantly from any tab or app
 - **Visual Default Indicator**: A minimalist pip highlights your current default preset at a glance.
 - **Music Protection Toggle**: Turn auto-music protection on or off with a switch.
 - **Universal Player Compatibility**: Supports Shadow DOM players, embedded video iframes, and modern single-page apps (SPAs).

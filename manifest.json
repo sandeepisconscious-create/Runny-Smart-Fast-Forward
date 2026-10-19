@@ -41,6 +41,13 @@
         "mac": "Alt+Shift+Down"
       },
       "description": "Reset speed to 1.0x / default"
+    },
+    "toggle-pip": {
+      "suggested_key": {
+        "default": "Alt+P",
+        "mac": "Alt+P"
+      },
+      "description": "Toggle Picture-in-Picture on current video"
     }
   },
   "background": {
